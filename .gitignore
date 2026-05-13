@@ -1,0 +1,32 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build output
+/dist
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS specific
+.DS_Store
+
+# IDE and Editor files
+.vscode
+.idea
+
+# Local environment variables
+.env
+.env.*.local
+
+# MCP config (local dev tools)
+.mcp.json
+*storybook.log
+storybook-static
+AGENTS.md
+opencode.json
+logs/combined.log
+logs/error.log

@@ -1,0 +1,63 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: "Noto Sans KR", sans-serif;
+  }
+}
+
+@keyframes tv-rank-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.finvest-tutor-header {
+  position: relative;
+  min-height: 76px;
+}
+
+.finvest-tutor-header-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  background-color: rgba(66, 214, 186, 0.3);
+}
+
+.finvest-tutor-status {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0;
+  line-height: 1;
+}
+
+.finvest-tutor-status > span:first-child {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+}
+
+.finvest-tutor-chip {
+  border-color: #bfdbfe;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  line-height: 20px;
+}
+
+.finvest-tutor-chip:hover {
+  background-color: #dbeafe;
+}
