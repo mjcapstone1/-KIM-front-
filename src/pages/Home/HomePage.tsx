@@ -15,15 +15,11 @@ import {
   useTopRising,
   useTopFalling,
   useTopHoldingTop10WithPrices,
-  useCategories,
-  useCategoryStocks,
-  useCategoryChangeRate,
-  useAllCategoryChangeRates,
-  useAllCategoryTopStocks,
+  useIndustryThemes,
   useDailySparklines,
   useMarketStatus,
 } from "@/hooks/useMarketQueries";
-import type { StockWithPrice, CategoryId } from "@/api/market";
+import type { StockWithPrice } from "@/api/market";
 import { toNumericStockId } from "@/api/market";
 import { useMarketStore, useQuote } from "@/store/useMarketStore";
 import MiniSparkline from "@/components/TradingVolumeRank/MiniSparkline";
@@ -62,11 +58,6 @@ function formatRelativeTime(dateStr?: string | null): string {
   if (hours < 24) return `${hours}시간 전`;
   const days = Math.floor(hours / 24);
   return `${days}일 전`;
-}
-
-function isExcludedThemeCategory(categoryName?: string | null): boolean {
-  const name = (categoryName ?? "").replace(/\s+/g, "");
-  return name.includes("지수") || name.includes("기타");
 }
 
 // 실시간 가격 업데이트를 위한 래퍼 컴포넌트
@@ -173,7 +164,7 @@ const HomePage: React.FC = () => {
   });
 
   // 테마 섹션 상태
-  const [selectedCategoryId, setSelectedCategoryId] = useState<CategoryId | undefined>(undefined);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | undefined>(undefined);
   const [showThemeList, setShowThemeList] = useState(false);
 
   // 오늘의 테마 AI 분석
@@ -329,116 +320,47 @@ const HomePage: React.FC = () => {
     };
   }, [stockData, isMarketOpen, subscribe, unsubscribe]);
 
-  // 우측 테마 섹션 데이터
-  const { data: categories } = useCategories();
-  const visibleCategories = useMemo(
-    () => (categories ?? []).filter((c) => !isExcludedThemeCategory(c?.categoryName)),
-    [categories],
-  );
-  const categoryStocks = useCategoryStocks(selectedCategoryId, isMarketOpen);
-  const categoryChangeRate = useCategoryChangeRate(selectedCategoryId);
+  // 우측 산업 테마 섹션 데이터
+  const industryThemesQuery = useIndustryThemes();
+  const industryThemes = industryThemesQuery.data ?? [];
 
-  // 첫 카테고리 자동 선택
+  // 첫 산업 테마 자동 선택
   useEffect(() => {
-    if (visibleCategories.length > 0 && selectedCategoryId == null) {
-      setSelectedCategoryId(visibleCategories[0].categoryId);
+    if (industryThemes.length > 0 && selectedThemeId == null) {
+      setSelectedThemeId(industryThemes[0].id);
       return;
     }
 
     if (
-      selectedCategoryId != null &&
-      visibleCategories.length > 0 &&
-      !visibleCategories.some((c) => c.categoryId === selectedCategoryId)
+      selectedThemeId != null &&
+      industryThemes.length > 0 &&
+      !industryThemes.some((theme) => theme.id === selectedThemeId)
     ) {
-      setSelectedCategoryId(visibleCategories[0].categoryId);
+      setSelectedThemeId(industryThemes[0].id);
     }
-  }, [visibleCategories, selectedCategoryId]);
+  }, [industryThemes, selectedThemeId]);
 
-  // 선택된 카테고리의 오늘의 테마 AI 분석 로드
+  const selectedTheme = useMemo(
+    () => industryThemes.find((theme) => theme.id === selectedThemeId) ?? industryThemes[0] ?? null,
+    [industryThemes, selectedThemeId],
+  );
+
   useEffect(() => {
-    if (selectedCategoryId == null) return;
-    let cancelled = false;
-    newsApi.getTodayThemeDetail(selectedCategoryId).then((data) => {
-      if (!cancelled) {
-        setThemeAnalysis(data.analysis ?? "");
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setThemeAnalysis("");
-      }
-    });
-    return () => { cancelled = true; };
-  }, [selectedCategoryId]);
+    setThemeAnalysis(selectedTheme?.summary ?? "");
+  }, [selectedTheme]);
 
-  // 카테고리 종목에서 거래대금 1위 추출
   const topByValueStock = useMemo(() => {
-    if (!categoryStocks.data) return null;
+    if (!selectedTheme || !selectedTheme.topStockId) return null;
+    return {
+      stockId: selectedTheme.topStockId,
+      name: selectedTheme.topStockName || selectedTheme.topStock,
+    };
+  }, [selectedTheme]);
 
-    const stocks = Array.isArray(categoryStocks.data?.stocks)
-      ? categoryStocks.data.stocks
-      : [];
-
-    const prices = Array.isArray((categoryStocks.data as any)?.prices)
-      ? (categoryStocks.data as any).prices
-      : [];
-
-    if (stocks.length === 0) return null;
-
-    if (prices.length === 0) {
-      return stocks[0] ?? null;
-    }
-
-    const sorted = [...prices].sort(
-      (a, b) => (b?.value ?? 0) - (a?.value ?? 0)
-    );
-
-    const topPrice = sorted[0];
-
-    if (!topPrice) {
-      return stocks[0] ?? null;
-    }
-
-    const stock = stocks.find(
-      (s) => s?.stockId === topPrice?.stockId
-    );
-
-    return stock ?? stocks[0] ?? null;
-  }, [categoryStocks.data]);
-
-  // 상위 3종목명
-  const topStockNames = useMemo(() => {
-    const stocks = Array.isArray(categoryStocks.data?.stocks)
-      ? categoryStocks.data.stocks
-      : [];
-    return stocks.slice(0, 3).map((s) => s.name);
-  }, [categoryStocks.data]);
-
-  // 드롭다운용 전체 카테고리 등락률
-  const categoryIds = useMemo(
-    () => visibleCategories.map((c) => c.categoryId),
-    [visibleCategories],
+  const topStockNames = useMemo(
+    () => selectedTheme?.stockNames.slice(0, 3) ?? [],
+    [selectedTheme],
   );
-  const allChangeRatesQueries = useAllCategoryChangeRates(
-    showThemeList ? categoryIds : [],
-  );
-  const allChangeRates = useMemo(
-    () => allChangeRatesQueries.map((q) => q.data),
-    [allChangeRatesQueries],
-  );
-
-  // 드롭다운용 카테고리별 거래대금 1위 종목명
-  const allTopStocksQueries = useAllCategoryTopStocks(
-    showThemeList ? categoryIds : [],
-  );
-  const topStockByCategory = useMemo(() => {
-    const map = new Map<CategoryId, string>();
-    for (const q of allTopStocksQueries) {
-      if (Array.isArray(q.data?.stocks) && q.data.stocks.length > 0) {
-        map.set(q.data.categoryId, q.data.stocks[0].name);
-      }
-    }
-    return map;
-  }, [allTopStocksQueries]);
 
   return (
     <div className="bg-white font-noto">
@@ -605,8 +527,8 @@ const HomePage: React.FC = () => {
         <section className="flex-1 p-8 flex flex-col gap-10 overflow-y-auto">
           {/* 테마 헤더 카드 */}
           <ThemeHeaderCard
-            categoryName={categoryChangeRate.data?.categoryName ?? "테마 로딩중..."}
-            changeRate={categoryChangeRate.data?.changeRate ?? 0}
+            categoryName={selectedTheme?.name ?? (industryThemesQuery.isLoading ? "산업 테마 로딩중..." : "산업 테마")}
+            changeRate={selectedTheme?.changeRate ?? 0}
             topStockNames={topStockNames}
             topByValueName={topByValueStock?.name ?? ""}
             showThemeList={showThemeList}
@@ -615,20 +537,20 @@ const HomePage: React.FC = () => {
 
           {/* 테마 리스트 (열림) OR 에어리어 차트 (닫힘) */}
           {showThemeList ? (
-            visibleCategories.length > 0 && (
+            industryThemes.length > 0 && (
               <ThemeListDropdown
-                categories={visibleCategories}
-                changeRates={allChangeRates}
-                topStockByCategory={topStockByCategory}
-                selectedCategoryId={selectedCategoryId!}
-                onSelectCategory={(id) => {
-                  setSelectedCategoryId(id);
+                themes={industryThemes}
+                selectedThemeId={selectedTheme?.id ?? ""}
+                onSelectTheme={(id) => {
+                  setSelectedThemeId(id);
                   setShowThemeList(false);
                 }}
               />
             )
-          ) : topByValueStock ? (
+          ) : topByValueStock && selectedTheme ? (
             <ThemeStockChart
+              themeId={selectedTheme.id}
+              themeName={selectedTheme.name}
               stockId={topByValueStock.stockId}
               stockName={topByValueStock.name}
             />
@@ -647,8 +569,8 @@ const HomePage: React.FC = () => {
                 <p className="text-[16px] font-medium text-black">
                   {themeAnalysis
                     ? themeAnalysis
-                    : categoryChangeRate.data && categoryChangeRate.data.changeRate != null
-                      ? `${categoryChangeRate.data.categoryName} 테마 등락률 ${categoryChangeRate.data.changeRate >= 0 ? "+" : ""}${categoryChangeRate.data.changeRate.toFixed(2)}%. ${topStockNames.slice(0, 2).join(", ")} 등 주요 종목 주목`
+                    : selectedTheme
+                      ? `${selectedTheme.name} 테마 등락률 ${selectedTheme.changeRate >= 0 ? "+" : ""}${selectedTheme.changeRate.toFixed(2)}%. ${topStockNames.slice(0, 2).join(", ")} 등 주요 종목 주목`
                       : "테마 분석 데이터를 불러오는 중입니다..."}
                 </p>
               </div>

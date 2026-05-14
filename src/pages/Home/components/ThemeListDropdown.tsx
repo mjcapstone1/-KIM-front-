@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { cn } from "@/utils/cn";
-import type { CategoryResponse, CategoryChangeRateResponse, CategoryId } from "@/api/market";
+import type { HomeThemeItem } from "@/api/market";
 import LineChartIcon from "@/assets/svgs/LineChartIcon";
 
 const THEME_NAME_COLORS = [
@@ -18,12 +18,8 @@ const THEME_NAME_COLORS = [
   "#3867D6", // 남색
 ];
 
-function getThemeColor(categoryId: CategoryId): string {
-  if (typeof categoryId === "number" && Number.isFinite(categoryId)) {
-    return THEME_NAME_COLORS[Math.abs(categoryId) % THEME_NAME_COLORS.length];
-  }
-
-  const seed = String(categoryId)
+function getThemeColor(themeId: string): string {
+  const seed = themeId
     .split("")
     .reduce((sum, char) => sum + char.charCodeAt(0), 0);
 
@@ -31,49 +27,33 @@ function getThemeColor(categoryId: CategoryId): string {
 }
 
 interface ThemeListDropdownProps {
-  categories: CategoryResponse[];
-  changeRates: (CategoryChangeRateResponse | undefined)[];
-  topStockByCategory: Map<CategoryId, string>;
-  selectedCategoryId: CategoryId;
-  onSelectCategory: (id: CategoryId) => void;
+  themes: HomeThemeItem[];
+  selectedThemeId: string;
+  onSelectTheme: (id: string) => void;
 }
 
 const ThemeListDropdown = ({
-  categories,
-  changeRates,
-  topStockByCategory,
-  selectedCategoryId,
-  onSelectCategory,
+  themes,
+  selectedThemeId,
+  onSelectTheme,
 }: ThemeListDropdownProps) => {
-  const rateMap = useMemo(() => {
-    const map = new Map<CategoryId, number>();
-    for (const cr of changeRates) {
-      if (cr) map.set(cr.categoryId, cr.changeRate);
-    }
-    return map;
-  }, [changeRates]);
-
   const sorted = useMemo(() => {
-    return [...categories].sort((a, b) => {
-      const rateA = rateMap.get(a.categoryId) ?? 0;
-      const rateB = rateMap.get(b.categoryId) ?? 0;
-      return rateB - rateA;
-    });
-  }, [categories, rateMap]);
+    return [...themes].sort((a, b) => b.changeRate - a.changeRate);
+  }, [themes]);
 
   return (
     <div className="flex flex-col gap-4 border border-gray-200 rounded-lg p-4 bg-white">
       <div className="grid grid-cols-2 gap-3 h-[250px] overflow-y-auto">
         {sorted.map((cat, idx) => {
-          const rate = rateMap.get(cat.categoryId) ?? 0;
+          const rate = cat.changeRate;
           const isPositive = rate >= 0;
-          const isSelected = cat.categoryId === selectedCategoryId;
-          const topStock = topStockByCategory.get(cat.categoryId);
+          const isSelected = cat.id === selectedThemeId;
+          const topStock = cat.topStockName || cat.topStock;
 
           return (
             <button
-              key={String(cat.categoryId)}
-              onClick={() => onSelectCategory(cat.categoryId)}
+              key={cat.id}
+              onClick={() => onSelectTheme(cat.id)}
               className={cn(
                 "flex items-center gap-3 p-3 rounded-lg text-left transition-colors border",
                 isSelected
@@ -93,9 +73,9 @@ const ThemeListDropdown = ({
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span
                     className="text-[13px] font-medium truncate"
-                    style={{ color: getThemeColor(cat.categoryId) }}
+                    style={{ color: cat.color || getThemeColor(cat.id) }}
                   >
-                    {cat.categoryName}
+                    {cat.name}
                   </span>
                   {topStock && (
                     <span className="text-[11px] text-gray-400 truncate">

@@ -52,6 +52,22 @@ export interface CategoryChangeRateResponse {
   updatedAt?: string;
 }
 
+export interface HomeThemeItem {
+  id: string;
+  name: string;
+  category: string;
+  stockNames: string[];
+  change: string;
+  changeRate: number;
+  summary: string;
+  color: string;
+  topStockId: StockId;
+  topStockName: string;
+  topStock: string;
+  basePrice: number;
+  newsCount: number;
+}
+
 interface RawCategoryChangeRateResponse {
   categoryId?: CategoryId;
   id?: CategoryId;
@@ -79,6 +95,34 @@ type RawCategoryStockListResponse = Record<string, unknown> & {
   id?: CategoryId;
   name?: string;
   stocks?: RawStockListItem[];
+};
+
+type RawHomeThemeItem = Record<string, unknown> & {
+  id?: string;
+  name?: string;
+  category?: string;
+  stocks?: string[];
+  change?: string | number;
+  summary?: string;
+  color?: string;
+  topStockId?: number | string;
+  topStockName?: string;
+  topStock?: string;
+  basePrice?: number | string;
+  newsCount?: number | string;
+};
+
+type RawHomeThemesResponse = Record<string, unknown> & {
+  category?: string;
+  items?: RawHomeThemeItem[];
+};
+
+type RawHomeThemeChartResponse = Record<string, unknown> & {
+  chartData?: Array<Record<string, unknown> & {
+    time?: string;
+    price?: number | string;
+    value?: number | string;
+  }>;
 };
 
 // --- Stock List / Closing Price Types ---
@@ -109,6 +153,25 @@ function toNumber(value: unknown, fallback = 0): number {
     return Number.isFinite(parsed) ? parsed : fallback;
   }
   return fallback;
+}
+
+function toPercentNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, "").replace(/%/g, "").trim());
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function toThemeChartTime(value: unknown): Time {
+  const text = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text as Time;
+  if (/^\d{2}\/\d{2}$/.test(text)) {
+    const [month, day] = text.split("/");
+    return `${new Date().getFullYear()}-${month}-${day}` as Time;
+  }
+  return text as Time;
 }
 
 function normalizeStockId(value: unknown): StockId {
@@ -149,6 +212,26 @@ function normalizeStockListItem(item: RawStockListItem): StockListItem {
     symbol: String(item.symbol ?? item.ticker ?? item.code ?? ""),
     name: String(item.name ?? item.displayName ?? item.canonicalName ?? ""),
     categoryId: toNumber(item.categoryId),
+  };
+}
+
+function normalizeHomeThemeItem(item: RawHomeThemeItem): HomeThemeItem {
+  const topStockName = String(item.topStockName ?? item.topStock ?? "");
+
+  return {
+    id: String(item.id ?? ""),
+    name: String(item.name ?? ""),
+    category: String(item.category ?? ""),
+    stockNames: Array.isArray(item.stocks) ? item.stocks.map(String) : [],
+    change: String(item.change ?? "0%"),
+    changeRate: toPercentNumber(item.change),
+    summary: String(item.summary ?? ""),
+    color: String(item.color ?? "#42d6ba"),
+    topStockId: normalizeStockId(item.topStockId),
+    topStockName,
+    topStock: String(item.topStock ?? topStockName),
+    basePrice: toNumber(item.basePrice),
+    newsCount: toNumber(item.newsCount),
   };
 }
 
@@ -608,6 +691,32 @@ export async function fetchCategoryChangeRate(
     negativeCount: data.negativeCount,
     updatedAt: data.updatedAt,
   };
+}
+
+export async function fetchHomeThemes(category = "industry"): Promise<HomeThemeItem[]> {
+  const res = await marketApi.get<RawHomeThemesResponse>("/api/v1/home/themes", {
+    params: { category },
+  });
+
+  const items = Array.isArray(res.data?.items) ? res.data.items : [];
+  return items
+    .map(normalizeHomeThemeItem)
+    .filter((item) => item.id.length > 0 && item.name.length > 0);
+}
+
+export async function fetchHomeThemeChart(themeId: string, days = 30): Promise<AreaDataPoint[]> {
+  const res = await marketApi.get<RawHomeThemeChartResponse>(
+    `/api/v1/home/themes/${themeId}/chart`,
+    { params: { days } },
+  );
+
+  const rows = Array.isArray(res.data?.chartData) ? res.data.chartData : [];
+  return rows
+    .map((item) => ({
+      time: toThemeChartTime(item.time),
+      value: toNumber(item.value ?? item.price),
+    }))
+    .filter((item) => item.value > 0 && String(item.time).length > 0);
 }
 
 // --- Index Candle API ---

@@ -14,6 +14,8 @@ import {
   fetchCategories,
   fetchCategoryStocks,
   fetchCategoryChangeRate,
+  fetchHomeThemes,
+  fetchHomeThemeChart,
   toAreaData,
   fetchSimulatorStocks,
 } from "@/api/market";
@@ -239,6 +241,23 @@ export function useAllCategoryTopStocks(categoryIds: CategoryId[]) {
       })),
       staleTime: 5 * 60_000,
     })),
+  });
+}
+
+export function useIndustryThemes() {
+  return useQuery({
+    queryKey: ["home", "themes", "industry"],
+    queryFn: () => fetchHomeThemes("industry"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useHomeThemeChart(themeId: string | undefined, days = 30) {
+  return useQuery<AreaDataPoint[]>({
+    queryKey: ["home", "theme-chart", themeId, days],
+    queryFn: () => fetchHomeThemeChart(themeId!, days),
+    enabled: Boolean(themeId),
+    staleTime: 5 * 60_000,
   });
 }
 

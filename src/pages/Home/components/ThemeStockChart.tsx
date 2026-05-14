@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { useStockCandles } from "@/hooks/useMarketQueries";
+import { useHomeThemeChart } from "@/hooks/useMarketQueries";
 import type { StockId } from "@/api/market";
 import AreaChart from "./AreaChart";
 
 interface ThemeStockChartProps {
+  themeId: string;
+  themeName: string;
   stockId: StockId;
   stockName: string;
 }
@@ -34,9 +36,9 @@ export const ThemeStockChartSkeleton = () => (
   </div>
 );
 
-const ThemeStockChart = ({ stockId, stockName }: ThemeStockChartProps) => {
+const ThemeStockChart = ({ themeId, themeName, stockId, stockName }: ThemeStockChartProps) => {
   const navigate = useNavigate();
-  const { data, isLoading } = useStockCandles(stockId, "일봉");
+  const { data, isLoading } = useHomeThemeChart(themeId, 30);
 
   if (isLoading) return <ThemeStockChartSkeleton />;
 
@@ -44,7 +46,7 @@ const ThemeStockChart = ({ stockId, stockName }: ThemeStockChartProps) => {
     <div className="flex flex-col gap-3">
       <div className="flex justify-between items-center">
         <h4 className="text-[14px] font-medium text-black">
-          {stockName} 1일 봉 차트
+          {themeName} 테마 흐름
         </h4>
         <button
           onClick={() => navigate(`/simulation/${stockId}`, {
@@ -55,7 +57,7 @@ const ThemeStockChart = ({ stockId, stockName }: ThemeStockChartProps) => {
           })}
           className="text-[12px] text-[#42d6ba] hover:underline"
         >
-          클릭하여 거래하기 →
+          {stockName} 거래하기 →
         </button>
       </div>
       <div className="w-full border-y border-gray-200">
