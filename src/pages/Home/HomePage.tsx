@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, memo } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   TradingVolumeRank,
@@ -8,7 +8,7 @@ import {
 } from "@/components";
 import { cn } from "@/utils/cn";
 import { formatPrice, formatChangeRate, formatTradingValue } from "@/utils/formatStock";
-import { newsApi, type NewsSummary } from "@/api/news";
+import { newsApi, type NaverEconomyNewsItem } from "@/api/news";
 import {
   useTopByValue,
   useTopByVolume,
@@ -47,8 +47,14 @@ const MOCK_FALLBACK = [
 
 type FilterType = "거래대금" | "거래량" | "급상승" | "급하락";
 
-function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+const ECONOMY_NEWS_PAGE_SIZE = 20;
+
+function formatRelativeTime(dateStr?: string | null): string {
+  if (!dateStr) return "날짜 없음";
+  const targetTime = new Date(dateStr).getTime();
+  if (Number.isNaN(targetTime)) return "날짜 없음";
+
+  const diff = Date.now() - targetTime;
   const minutes = Math.floor(diff / 60_000);
   if (minutes < 1) return "방금 전";
   if (minutes < 60) return `${minutes}분 전`;
@@ -174,28 +180,83 @@ const HomePage: React.FC = () => {
   const [themeAnalysis, setThemeAnalysis] = useState<string>("");
 
   // 관련 뉴스
-  const [latestNews, setLatestNews] = useState<NewsSummary[]>([]);
+  const [latestNews, setLatestNews] = useState<NaverEconomyNewsItem[]>([]);
   const [latestNewsLoading, setLatestNewsLoading] = useState(false);
-  const [newsIdByTitle, setNewsIdByTitle] = useState<Map<string, number>>(new Map());
+  const [latestNewsLoadingMore, setLatestNewsLoadingMore] = useState(false);
+  const [economyNewsNextStart, setEconomyNewsNextStart] = useState(1);
+  const [economyNewsHasMore, setEconomyNewsHasMore] = useState(true);
+  const relatedNewsScrollRef = useRef<HTMLDivElement | null>(null);
+  const relatedNewsSentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // 뉴스 상세 이동용 ID 매핑(제목 기반)
-  useEffect(() => {
-    let cancelled = false;
-    newsApi.getNewsList("LATEST").then((data) => {
-      if (cancelled) return;
-      const map = new Map<string, number>();
-      data.forEach((item) => {
-        if (!map.has(item.title)) {
-          map.set(item.title, item.id);
-        }
+  const loadEconomyNews = useCallback(async (start = 1, replace = false) => {
+    if (replace) {
+      setLatestNewsLoading(true);
+    } else {
+      setLatestNewsLoadingMore(true);
+    }
+
+    try {
+      const data = await newsApi.getEconomyNews(start, ECONOMY_NEWS_PAGE_SIZE);
+      setLatestNews((prev) => {
+        if (replace) return data.items;
+        const existingIds = new Set(prev.map((item) => item.id));
+        return [
+          ...prev,
+          ...data.items.filter((item) => !existingIds.has(item.id)),
+        ];
       });
-      setNewsIdByTitle(map);
-    }).catch(() => {
-      if (!cancelled) {
-        setNewsIdByTitle(new Map());
+      setEconomyNewsNextStart(data.nextStart);
+      setEconomyNewsHasMore(data.hasMore);
+    } catch {
+      if (replace) {
+        setLatestNews([]);
       }
-    });
-    return () => { cancelled = true; };
+      setEconomyNewsHasMore(false);
+    } finally {
+      if (replace) {
+        setLatestNewsLoading(false);
+      } else {
+        setLatestNewsLoadingMore(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEconomyNews(1, true);
+  }, [loadEconomyNews]);
+
+  useEffect(() => {
+    const sentinel = relatedNewsSentinelRef.current;
+    const root = relatedNewsScrollRef.current;
+    if (!sentinel || !root || !economyNewsHasMore || latestNewsLoading || latestNewsLoadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadEconomyNews(economyNewsNextStart, false);
+        }
+      },
+      { root, rootMargin: "80px", threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [
+    economyNewsHasMore,
+    economyNewsNextStart,
+    latestNewsLoading,
+    latestNewsLoadingMore,
+    loadEconomyNews,
+  ]);
+
+  const openNews = useCallback((url: string) => {
+    if (!url) return;
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+    if (popup) {
+      popup.opener = null;
+    }
   }, []);
 
   // 좌측 리스트 쿼리
@@ -297,18 +358,14 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     if (selectedCategoryId == null) return;
     let cancelled = false;
-    setLatestNewsLoading(true);
     newsApi.getTodayThemeDetail(selectedCategoryId).then((data) => {
       if (!cancelled) {
         setThemeAnalysis(data.analysis ?? "");
-        setLatestNews(Array.isArray(data.news) ? data.news.slice(0, 3) : []);
       }
     }).catch(() => {
       if (!cancelled) {
-        setLatestNews([]);
+        setThemeAnalysis("");
       }
-    }).finally(() => {
-      if (!cancelled) setLatestNewsLoading(false);
     });
     return () => { cancelled = true; };
   }, [selectedCategoryId]);
@@ -600,30 +657,32 @@ const HomePage: React.FC = () => {
 
           {/* 관련 뉴스 섹션 */}
           <div className="flex flex-col gap-4">
-            <h3 className="text-[18px] font-bold text-black">관련뉴스</h3>
-            <div className="flex flex-col gap-3">
+            <h3 className="text-[18px] font-bold text-black">경제뉴스</h3>
+            <div ref={relatedNewsScrollRef} className="flex max-h-[420px] flex-col gap-3 overflow-y-auto pr-1">
               {latestNewsLoading ? (
                 <p className="text-sm text-gray-400 py-4">뉴스를 불러오는 중...</p>
               ) : latestNews.length > 0 ? (
-                latestNews.map((news) => {
-                  const detailNewsId = news.id ?? news.newsId ?? newsIdByTitle.get(news.title);
-                  const canNavigateNews = detailNewsId != null;
-                  const timeLabel = `${news.provider} · ${formatRelativeTime(news.publishedAt)}`;
-                  return (
-                    <RelatedNews
-                      key={`${news.provider}-${news.publishedAt}-${news.title}`}
-                      sourceAndTime={timeLabel}
-                      title={news.title}
-                      onClick={canNavigateNews ? () => navigate(`/news/${detailNewsId}`) : undefined}
-                      className={cn(
-                        "border-gray-200 text-black transition-colors",
-                        canNavigateNews
-                          ? "hover:border-[#42d6ba] hover:bg-[#f8fffd]"
-                          : "cursor-default"
-                      )}
-                    />
-                  );
-                })
+                <>
+                  {latestNews.map((news) => {
+                    const timeLabel = `${news.provider} · ${formatRelativeTime(news.publishedAt)}`;
+                    return (
+                      <RelatedNews
+                        key={news.id}
+                        sourceAndTime={timeLabel}
+                        title={news.title}
+                        onClick={() => openNews(news.url)}
+                        className="border-gray-200 text-black transition-colors hover:border-[#42d6ba] hover:bg-[#f8fffd]"
+                      />
+                    );
+                  })}
+                  <div ref={relatedNewsSentinelRef} className="h-2 shrink-0" />
+                  {latestNewsLoadingMore && (
+                    <p className="text-sm text-gray-400 py-3 text-center">경제 뉴스를 더 불러오는 중...</p>
+                  )}
+                  {!economyNewsHasMore && (
+                    <p className="text-xs text-gray-300 py-2 text-center">마지막 뉴스입니다.</p>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-gray-400 py-4">표시할 뉴스가 없습니다.</p>
               )}

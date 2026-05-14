@@ -5,6 +5,8 @@ export type {
   NewsSortType,
   NewsListItem,
   NewsSummary,
+  NaverEconomyNewsItem,
+  NaverEconomyNewsResponse,
   NewsDetailResponse,
   ThemeSummary,
   KeywordTrendItem,

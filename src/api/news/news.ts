@@ -39,6 +39,31 @@ export type NewsSummary = {
   provider: string;
 };
 
+export type NaverEconomyNewsItem = {
+  id: string;
+  title: string;
+  summary?: string;
+  description?: string;
+  provider: string;
+  publisher?: string;
+  url: string;
+  link?: string;
+  originalLink?: string;
+  naverLink?: string;
+  publishedAt: string;
+  createdAt?: string | null;
+};
+
+export type NaverEconomyNewsResponse = {
+  items: NaverEconomyNewsItem[];
+  total: number;
+  start: number;
+  display: number;
+  nextStart: number;
+  hasMore: boolean;
+  provider: string;
+};
+
 /** 뉴스/테마 상세 응답 */
 export type NewsDetailResponse = {
   id?: number;
@@ -137,6 +162,22 @@ export const newsApi = {
       params: { sortType: sort },
     });
     return unwrapArray<NewsListItem>(res.data);
+  },
+
+  /** 네이버 경제 뉴스 조회: GET /news/economy */
+  getEconomyNews: async (start = 1, display = 20): Promise<NaverEconomyNewsResponse> => {
+    const res = await insightApiClient.get<NaverEconomyNewsResponse>("/news/economy", {
+      params: { start, display },
+    });
+    return {
+      items: unwrapArray<NaverEconomyNewsItem>(res.data),
+      total: Number(res.data.total ?? 0),
+      start: Number(res.data.start ?? start),
+      display: Number(res.data.display ?? display),
+      nextStart: Number(res.data.nextStart ?? start + display),
+      hasMore: Boolean(res.data.hasMore),
+      provider: res.data.provider ?? "naver",
+    };
   },
 
   /** 뉴스 상세 조회: GET /news/{id} */
