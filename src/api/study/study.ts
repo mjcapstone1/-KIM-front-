@@ -58,6 +58,23 @@ export type TodayAiStudyRecommendResponse = {
   content: string;
 };
 
+export type AiTutorChatMessage = {
+  role: "assistant" | "user";
+  content: string;
+};
+
+export type AiTutorChatRequest = {
+  message: string;
+  investmentType?: string | null;
+  history?: AiTutorChatMessage[];
+};
+
+export type AiTutorChatResponse = {
+  message: string;
+  provider?: string;
+  model?: string;
+};
+
 // 백엔드가 배열을 래핑해서 반환할 수 있으므로 안전하게 추출
 function unwrapArray<T>(data: unknown): T[] {
   if (Array.isArray(data)) return data;
@@ -101,6 +118,12 @@ export const studyApi = {
   /** 오늘의 AI 학습 추천 조회: GET /study/ai-recommends/today */
   getTodayAiStudyRecommend: async (): Promise<TodayAiStudyRecommendResponse> => {
     const res = await studyApiClient.get<TodayAiStudyRecommendResponse>("/study/ai-recommends/today");
+    return res.data;
+  },
+
+  /** AI 투자 튜터 채팅: POST /study/ai-tutor/chat */
+  askAiTutor: async (req: AiTutorChatRequest): Promise<AiTutorChatResponse> => {
+    const res = await studyApiClient.post<AiTutorChatResponse>("/study/ai-tutor/chat", req);
     return res.data;
   },
 

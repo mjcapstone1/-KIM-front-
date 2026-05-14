@@ -3,7 +3,7 @@ import { gamificationApiClient } from "./client";
 // ─── 타입 정의 ───
 
 export type SquadRankingItem = {
-  squadId: number;
+  squadId: number | string;
   squadName: string;
   currentRanking: number;
   totalXp: number;
@@ -52,10 +52,82 @@ export type SquadItem = {
 };
 
 export type MySquadInfo = {
-  userId: string;
-  nickname: string;
-  totalXp: number;
-  level: number;
+  squadId: number | string;
+  squadName: string;
+  joined: boolean;
+  members?: number;
+  groupReturnRate?: number;
+};
+
+const readNumber = (value: unknown, fallback = 0): number => (
+  typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string" && value.trim().length > 0 && Number.isFinite(Number(value))
+      ? Number(value)
+      : fallback
+);
+
+const normalizeSquadRankingItem = (item: Record<string, unknown>, index: number): SquadRankingItem | null => {
+  const squadId = (item.squadId ?? item.id ?? item.groupId ?? item.teamId ?? "") as number | string;
+  const squadName = String(
+    item.squadName ??
+    item.name ??
+    item.schoolName ??
+    item.universityName ??
+    item.title ??
+    "",
+  );
+  if (String(squadId).length === 0 || squadName.length === 0) {
+    return null;
+  }
+
+  const currentRanking = readNumber(item.currentRanking ?? item.rank ?? item.ranking, index + 1);
+  const weeklyXp = readNumber(item.weeklyXp ?? item.xp ?? item.totalXp, 0);
+  const totalXp = readNumber(item.totalXp ?? item.xp ?? item.weeklyXp, weeklyXp);
+
+  return {
+    squadId,
+    squadName,
+    currentRanking,
+    totalXp,
+    weeklyXp,
+    weeklyXpChangeRate: readNumber(item.weeklyXpChangeRate ?? item.groupReturnRate, 0),
+    rankingChange: readNumber(item.rankingChange, 0),
+  };
+};
+
+const normalizeMySquadInfo = (data: unknown): MySquadInfo | null => {
+  if (!data || typeof data !== "object") return null;
+  const row = data as Record<string, unknown>;
+
+  const joined = row.joined !== false && row.squad !== null;
+  if (!joined && !row.id && !row.squadId && !row.name && !row.squadName) {
+    return null;
+  }
+
+  const nested = row.squad && typeof row.squad === "object"
+    ? row.squad as Record<string, unknown>
+    : row;
+  const squadId = (nested.squadId ?? nested.id ?? nested.groupId ?? nested.teamId ?? "") as number | string;
+  const squadName = String(
+    nested.squadName ??
+    nested.name ??
+    nested.schoolName ??
+    nested.universityName ??
+    "",
+  );
+
+  if (String(squadId).length === 0 || squadName.length === 0) {
+    return null;
+  }
+
+  return {
+    squadId,
+    squadName,
+    joined: row.joined !== false,
+    members: readNumber(nested.members, 0),
+    groupReturnRate: readNumber(nested.groupReturnRate, 0),
+  };
 };
 
 // 백엔드가 배열을 래핑해서 반환할 수 있으므로 안전하게 추출
@@ -85,7 +157,9 @@ export const gamificationApi = {
   /** 스쿼드(대학) 랭킹 조회: GET /xp/squads/ranking */
   getSquadRanking: async (): Promise<SquadRankingItem[]> => {
     const res = await gamificationApiClient.get("/xp/squads/ranking");
-    return unwrapArray<SquadRankingItem>(res.data);
+    return unwrapArray<Record<string, unknown>>(res.data)
+      .map((item, index) => normalizeSquadRankingItem(item, index))
+      .filter((item): item is SquadRankingItem => item != null);
   },
 
   /** 내 스쿼드 기여도 조회: GET /xp/squads/contributions/me */
@@ -145,13 +219,13 @@ export const gamificationApi = {
   },
 
   /** 내 스쿼드 조회: GET /squads/me */
-  getMySquad: async (): Promise<MySquadInfo> => {
-    const res = await gamificationApiClient.get<MySquadInfo>("/squads/me");
-    return res.data;
+  getMySquad: async (): Promise<MySquadInfo | null> => {
+    const res = await gamificationApiClient.get<unknown>("/squads/me");
+    return normalizeMySquadInfo(res.data);
   },
 
   /** 스쿼드 참여: POST /squads/{squadId}/join */
-  joinSquad: async (squadId: number): Promise<void> => {
+  joinSquad: async (squadId: number | string): Promise<void> => {
     await gamificationApiClient.post(`/squads/${squadId}/join`);
   },
 

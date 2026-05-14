@@ -10,4 +10,7 @@ export type {
   MonthlyLessonCompletionResponse,
   MyStudyMetricResponse,
   TodayAiStudyRecommendResponse,
+  AiTutorChatMessage,
+  AiTutorChatRequest,
+  AiTutorChatResponse,
 } from "./study";

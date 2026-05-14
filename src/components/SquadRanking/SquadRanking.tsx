@@ -4,7 +4,7 @@ import type { SquadRankingItem } from "@/api/gamification";
 
 export interface SquadRankingProps {
   items: SquadRankingItem[];
-  mySquadId: number | null;
+  mySquadId: number | string | null;
   onViewAll?: () => void;
   className?: string;
 }

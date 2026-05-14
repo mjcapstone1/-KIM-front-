@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { studyApi } from "@/api/study";
 import type { InvestmentType } from "../learningData";
 import { BotIcon, SendIcon, SparklesIcon, UserIcon } from "./TutorIcons";
 
@@ -28,6 +29,11 @@ const suggestedQuestions = [
   "손절매는 언제 해야 하나요?",
 ];
 
+const getErrorMessage = (error: unknown) => {
+  const responseMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+  return responseMessage || "지금 AI 튜터 연결이 잠시 불안정해요. 잠깐 뒤에 다시 질문해 주세요.";
+};
+
 const createInitialMessage = (investmentType: InvestmentType | null): ChatMessage => ({
   id: 1,
   role: "assistant",
@@ -38,32 +44,10 @@ const createInitialMessage = (investmentType: InvestmentType | null): ChatMessag
   }\n\n주식, ETF, 포트폴리오, 리스크 관리 등 다양한 질문에 답해드립니다.`,
 });
 
-const buildMockAnswer = (question: string, investmentType: InvestmentType | null) => {
-  const prefix = investmentType ? `${typeNames[investmentType]} 투자자 기준으로 보면, ` : "";
-  const normalized = question.replace(/\s+/g, "");
-
-  if (normalized.includes("PER")) {
-    return `${prefix}PER은 주가를 주당순이익으로 나눈 값입니다. 같은 업종 평균과 비교하면 현재 가격이 이익 대비 비싼지, 싼지 판단하는 데 도움이 됩니다.`;
-  }
-
-  if (normalized.includes("ETF")) {
-    return `${prefix}ETF는 여러 종목을 묶어 거래하는 상품입니다. 개별 주식보다 분산 효과가 있어 초보 투자자가 시장 흐름을 연습하기에 좋습니다.`;
-  }
-
-  if (normalized.includes("분산")) {
-    return `${prefix}분산 투자는 한 종목의 손실이 전체 자산에 주는 충격을 줄이는 방법입니다. 업종, 자산군, 투자 시점을 나누면 변동성을 낮출 수 있습니다.`;
-  }
-
-  if (normalized.includes("손절")) {
-    return `${prefix}손절 기준은 매수 전에 정해야 합니다. 예를 들어 -5% 가격, 주요 지지선 이탈, 투자 아이디어 훼손처럼 숫자와 조건을 함께 두는 방식이 좋습니다.`;
-  }
-
-  return `${prefix}먼저 투자 목적, 기간, 감당 가능한 손실 범위를 정리해보세요. 그다음 기업의 실적, 가격 수준, 차트 흐름을 순서대로 확인하면 판단이 더 명확해집니다.`;
-};
-
 const AITutorPanel = ({ investmentType }: AITutorPanelProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [createInitialMessage(investmentType)]);
   const [draft, setDraft] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messageIdRef = useRef(2);
   const isInitialOnly = messages.length === 1;
@@ -72,9 +56,9 @@ const AITutorPanel = ({ investmentType }: AITutorPanelProps) => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = (value = draft) => {
+  const sendMessage = async (value = draft) => {
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (!trimmed || isSending) return;
 
     const userMessageId = messageIdRef.current;
     const assistantMessageId = messageIdRef.current + 1;
@@ -85,14 +69,38 @@ const AITutorPanel = ({ investmentType }: AITutorPanelProps) => {
       role: "user",
       content: trimmed,
     };
-    const assistantMessage: ChatMessage = {
-      id: assistantMessageId,
-      role: "assistant",
-      content: buildMockAnswer(trimmed, investmentType),
-    };
 
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    const history = messages.slice(-8).map(({ role, content }) => ({ role, content }));
+    setMessages((prev) => [...prev, userMessage]);
     setDraft("");
+    setIsSending(true);
+
+    try {
+      const response = await studyApi.askAiTutor({
+        message: trimmed,
+        investmentType,
+        history,
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: response.message || "답변을 받지 못했어요. 잠시 후 다시 질문해 주세요.",
+        },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: getErrorMessage(error),
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -125,6 +133,7 @@ const AITutorPanel = ({ investmentType }: AITutorPanelProps) => {
               key={question}
               type="button"
               onClick={() => sendMessage(question)}
+              disabled={isSending}
               className="finvest-tutor-chip text-sm px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
             >
               {question}
@@ -161,6 +170,16 @@ const AITutorPanel = ({ investmentType }: AITutorPanelProps) => {
             </div>
           );
         })}
+        {isSending && (
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-500">
+              <BotIcon className="h-5 w-5 text-white" />
+            </div>
+            <div className="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 text-sm text-gray-500">
+              AI 튜터가 답변을 생각하고 있어요...
+            </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -173,12 +192,13 @@ const AITutorPanel = ({ investmentType }: AITutorPanelProps) => {
             rows={1}
             placeholder="투자에 대해 궁금한 점을 물어보세요... (Enter로 전송)"
             className="flex-1 resize-none bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none disabled:opacity-50 max-h-24"
+            disabled={isSending}
           />
           <button
             type="button"
             onClick={() => sendMessage()}
             className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#1F3B70] to-[#42D6BA] text-white disabled:opacity-40 hover:shadow-md transition-all"
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || isSending}
             aria-label="메시지 전송"
           >
             <SendIcon className="h-4 w-4" />

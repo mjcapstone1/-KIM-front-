@@ -73,7 +73,7 @@ const ChallengePage = () => {
   const [squadTabError, setSquadTabError] = useState<string | null>(null);
   const [squadRankingError, setSquadRankingError] = useState<string | null>(null);
   const [squadContributionError, setSquadContributionError] = useState<string | null>(null);
-  const [joiningSquadId, setJoiningSquadId] = useState<number | null>(null);
+  const [joiningSquadId, setJoiningSquadId] = useState<number | string | null>(null);
   const [squadJoinError, setSquadJoinError] = useState<string | null>(null);
   const [squadLoading, setSquadLoading] = useState(false);
   const [squadLoaded, setSquadLoaded] = useState(false);
@@ -111,7 +111,7 @@ const ChallengePage = () => {
 
       if (mySquadResult.status === "fulfilled") {
         setMySquadInfo(mySquadResult.value);
-        setHasMySquad(true);
+        setHasMySquad(mySquadResult.value != null);
       } else {
         setMySquadInfo(null);
         setHasMySquad(false);
@@ -164,7 +164,7 @@ const ChallengePage = () => {
     };
   }, [squadLoaded]);
 
-  const handleJoinSquad = async (squadId: number) => {
+  const handleJoinSquad = async (squadId: number | string) => {
     setJoiningSquadId(squadId);
     setSquadJoinError(null);
 
@@ -179,8 +179,10 @@ const ChallengePage = () => {
     }
   };
 
-  const mySquadData = squadRanking?.[0] ?? null;
-  const mySquadId = mySquadData?.squadId ?? null;
+  const mySquadId = mySquadInfo?.squadId ?? null;
+  const mySquadData = mySquadId == null
+    ? null
+    : squadRanking.find((item) => String(item.squadId) === String(mySquadId)) ?? null;
 
   const rivalSquad = useMemo(() => {
     if (!Array.isArray(squadRanking) || !mySquadData) return null;
@@ -193,18 +195,14 @@ const ChallengePage = () => {
   const myContributionPercentile = useMemo(() => {
     if (!Array.isArray(squadContributions) || squadContributions.length === 0) return 50;
     const totalMembers = squadContributions.length;
-    const myRanking = squadContributions.find((c) => c.nickname === mySquadInfo?.nickname)?.ranking
+    const myRanking = squadContributions.find((c) => c.nickname === myXp?.nickname)?.ranking
       ?? Math.ceil(totalMembers / 2);
     return (myRanking / totalMembers) * 100;
-  }, [mySquadInfo?.nickname, squadContributions]);
+  }, [myXp?.nickname, squadContributions]);
 
   const renderJoinSquad = () => {
     const normalizedKeyword = squadSearchKeyword.trim().toLowerCase();
     const joinableSquads = squadList
-      .map((item) => ({
-        ...item,
-        numericSquadId: Number(item.squadId),
-      }))
       .filter((item) => {
         if (!normalizedKeyword) return true;
         const name = item.squadName.toLowerCase();
@@ -273,14 +271,10 @@ const ChallengePage = () => {
                 <button
                   type="button"
                   className="rounded-lg bg-main-1 px-4 py-2 text-white text-sm font-semibold disabled:opacity-60 shrink-0"
-                  onClick={() => {
-                    if (Number.isFinite(item.numericSquadId)) {
-                      handleJoinSquad(item.numericSquadId);
-                    }
-                  }}
-                  disabled={!Number.isFinite(item.numericSquadId) || joiningSquadId === item.numericSquadId}
+                  onClick={() => handleJoinSquad(item.squadId)}
+                  disabled={joiningSquadId === item.squadId}
                 >
-                  {joiningSquadId === item.numericSquadId ? "가입 중..." : "가입하기"}
+                  {joiningSquadId === item.squadId ? "가입 중..." : "가입하기"}
                 </button>
               </div>
             ))}
@@ -424,7 +418,7 @@ const ChallengePage = () => {
         onClose={() => setShowContributionModal(false)}
         variant="contribution"
         contributionItems={squadContributions}
-        myNickname={mySquadInfo?.nickname}
+        myNickname={myXp?.nickname}
       />
     </div>
   );

@@ -12,7 +12,7 @@ export interface SquadRankingModalProps {
   onClose: () => void;
   variant: SquadRankingModalVariant;
   squadRankingItems?: SquadRankingItem[];
-  mySquadId?: number | null;
+  mySquadId?: number | string | null;
   contributionItems?: SquadContributionItem[];
   myNickname?: string;
 }
