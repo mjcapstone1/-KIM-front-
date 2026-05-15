@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { searchAll, type SearchLearningResult, type SearchStockResult } from "@/api/search";
 import { cn } from "@/utils/cn";
 
 export interface HeaderProps {
@@ -15,22 +17,6 @@ const DEFAULT_MENUS = [
   "AI 학습",
   "챌린지",
 ];
-
-const SEARCH_DATA = {
-  stocks: [
-    { name: "삼성전자", code: "005930" },
-    { name: "SK하이닉스", code: "000660" },
-    { name: "NAVER", code: "035420" },
-    { name: "카카오", code: "035720" },
-    { name: "LG에너지솔루션", code: "373220" },
-  ],
-  learning: [
-    { id: "1", title: "복리의 마법 이해하기", category: "기초" },
-    { id: "2", title: "재무제표 읽는 법", category: "중급" },
-    { id: "3", title: "ETF 투자 가이드", category: "기초" },
-    { id: "4", title: "캔들스틱 차트 분석", category: "기술적 분석" },
-  ],
-};
 
 const SearchIcon = () => (
   <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -58,9 +44,15 @@ export const Header: React.FC<HeaderProps> = ({
   onMenuClick,
   className,
 }) => {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [matchedStocks, setMatchedStocks] = useState<SearchStockResult[]>([]);
+  const [matchedLearning, setMatchedLearning] = useState<SearchLearningResult[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [hasSearchError, setHasSearchError] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
+  const normalizedQuery = query.trim();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -72,12 +64,76 @@ export const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const matchedStocks = query
-    ? SEARCH_DATA.stocks.filter((stock) => stock.name.includes(query) || stock.code.includes(query))
-    : [];
-  const matchedLearning = query
-    ? SEARCH_DATA.learning.filter((item) => item.title.toLowerCase().includes(query.toLowerCase()))
-    : [];
+  useEffect(() => {
+    if (!isSearchOpen || normalizedQuery.length === 0) {
+      setMatchedStocks([]);
+      setMatchedLearning([]);
+      setIsSearchLoading(false);
+      setHasSearchError(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setIsSearchLoading(true);
+      setHasSearchError(false);
+      try {
+        const result = await searchAll(normalizedQuery, 6);
+        if (cancelled) return;
+        setMatchedStocks(result.stocks);
+        setMatchedLearning(result.learning);
+      } catch {
+        if (cancelled) return;
+        setMatchedStocks([]);
+        setMatchedLearning([]);
+        setHasSearchError(true);
+      } finally {
+        if (!cancelled) {
+          setIsSearchLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isSearchOpen, normalizedQuery]);
+
+  const closeSearch = () => {
+    setQuery("");
+    setIsSearchOpen(false);
+  };
+
+  const handleStockSelect = (stock: SearchStockResult) => {
+    const stockId = stock.stockId ?? stock.id;
+    const stockIdText = String(stockId ?? "").trim();
+    closeSearch();
+
+    if (stockIdText) {
+      navigate(`/simulation/${stockIdText}`, {
+        state: {
+          stockName: stock.name ?? "",
+          stockCode: stock.code ?? "",
+        },
+      });
+      return;
+    }
+
+    onMenuClick?.("투자 시뮬레이터");
+  };
+
+  const handleLearningSelect = (item: SearchLearningResult) => {
+    closeSearch();
+    navigate("/ai-learning", {
+      state: {
+        learningId: item.id,
+        query: item.title ?? normalizedQuery,
+      },
+    });
+  };
+
+  const hasSearchResult = matchedStocks.length > 0 || matchedLearning.length > 0;
 
   return (
     <header
@@ -137,29 +193,29 @@ export const Header: React.FC<HeaderProps> = ({
             />
           </div>
 
-          {isSearchOpen && query && (
+          {isSearchOpen && normalizedQuery && (
             <div className="absolute left-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+              {isSearchLoading && (
+                <div className="border-b border-gray-100 px-5 py-3 text-sm text-[#909193]">검색 중...</div>
+              )}
+
               {matchedStocks.length > 0 && (
                 <div className="p-2">
                   <div className="px-3 py-2 text-xs font-bold uppercase text-[#909193]">주식 종목</div>
                   {matchedStocks.map((stock) => (
                     <button
-                      key={stock.code}
+                      key={String(stock.stockId ?? stock.id ?? stock.code ?? stock.name)}
                       type="button"
-                      onClick={() => {
-                        onMenuClick?.("투자 시뮬레이터");
-                        setQuery("");
-                        setIsSearchOpen(false);
-                      }}
+                      onClick={() => handleStockSelect(stock)}
                       className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-[#C7F3EB]"
                     >
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#42D6BA] text-sm font-bold text-white">
-                          {stock.name[0]}
+                          {(stock.name ?? "?")[0]}
                         </div>
                         <div className="text-left">
-                          <div className="text-sm font-medium text-[#1D1E20]">{stock.name}</div>
-                          <div className="text-xs text-[#909193]">{stock.code}</div>
+                          <div className="text-sm font-medium text-[#1D1E20]">{stock.name ?? "이름 없는 종목"}</div>
+                          <div className="text-xs text-[#909193]">{stock.code ?? stock.marketSegment ?? "종목 코드 없음"}</div>
                         </div>
                       </div>
                       <ArrowUpIcon />
@@ -173,28 +229,28 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="px-3 py-2 text-xs font-bold uppercase text-[#909193]">AI 학습</div>
                   {matchedLearning.map((item) => (
                     <button
-                      key={item.id}
+                      key={String(item.id ?? item.title)}
                       type="button"
-                      onClick={() => {
-                        onMenuClick?.("AI 학습");
-                        setQuery("");
-                        setIsSearchOpen(false);
-                      }}
+                      onClick={() => handleLearningSelect(item)}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-[#C7F3EB]"
                     >
                       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#C7F3EB] text-sm font-bold text-[#3AB8A8]">
                         AI
                       </div>
                       <div className="text-left">
-                        <div className="text-sm font-medium text-[#1D1E20]">{item.title}</div>
-                        <div className="text-xs text-[#3AB8A8]">{item.category}</div>
+                        <div className="text-sm font-medium text-[#1D1E20]">{item.title ?? "학습 콘텐츠"}</div>
+                        <div className="text-xs text-[#3AB8A8]">{item.category ?? item.contentType ?? "AI 학습"}</div>
                       </div>
                     </button>
                   ))}
                 </div>
               )}
 
-              {matchedStocks.length === 0 && matchedLearning.length === 0 && (
+              {!isSearchLoading && hasSearchError && (
+                <div className="p-6 text-center text-sm text-[#909193]">검색 중 문제가 발생했습니다.</div>
+              )}
+
+              {!isSearchLoading && !hasSearchError && !hasSearchResult && (
                 <div className="p-6 text-center text-sm text-[#909193]">검색 결과가 없습니다.</div>
               )}
             </div>

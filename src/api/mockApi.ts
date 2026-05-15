@@ -263,6 +263,20 @@ function handleMock(config: InternalAxiosRequestConfig): AxiosResponse<unknown> 
   if (path === "/members/favorite-stocks" && method === "GET") return ok(config, stocks.slice(0, 3).map((stock) => ({ stockId: stock.stockId, name: stock.name, userId: mockUser.userId })));
   if (path.startsWith("/members/favorite-stocks/")) return ok(config, { stockId: Number(path.split("/").pop()), name: "관심 종목", userId: mockUser.userId });
 
+  if ((path === "/api/v1/search" || path === "/v1/search") && method === "GET") {
+    const query = (params.get("query") ?? "").toLowerCase().replace(/\s+/g, "");
+    const limit = Number(params.get("limit") ?? 6);
+    const stockResults = stocks
+      .filter((stock) => stock.name.toLowerCase().replace(/\s+/g, "").includes(query) || stock.symbol.includes(query))
+      .slice(0, limit)
+      .map((stock) => ({ stockId: stock.stockId, id: stock.stockId, name: stock.name, code: stock.symbol, type: "domestic" }));
+    const learningResults = courses
+      .filter((course) => course.title.toLowerCase().replace(/\s+/g, "").includes(query))
+      .slice(0, limit)
+      .map((course) => ({ id: course.id, title: course.title, category: course.difficulty, contentType: "course" }));
+    return ok(config, { query, stocks: stockResults, learning: learningResults });
+  }
+
   if (path === "/market/status") return ok(config, { status: "CLOSED" });
   if (path === "/market/categories") return ok(config, categories);
   if (path.match(/^\/market\/categories\/\d+\/stocks$/)) {
