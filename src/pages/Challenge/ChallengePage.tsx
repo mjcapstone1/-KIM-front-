@@ -11,7 +11,6 @@ import {
   gamificationApi,
   type SquadRankingItem,
   type SquadContributionItem,
-  type MyXpInfo,
   type MySquadInfo,
   type SquadItem,
 } from "@/api/gamification";
@@ -67,7 +66,6 @@ const ChallengePage = () => {
   const [squadList, setSquadList] = useState<SquadItem[]>([]);
   const [squadSearchKeyword, setSquadSearchKeyword] = useState("");
   const [squadContributions, setSquadContributions] = useState<SquadContributionItem[]>([]);
-  const [myXp, setMyXp] = useState<MyXpInfo | null>(null);
   const [mySquadInfo, setMySquadInfo] = useState<MySquadInfo | null>(null);
   const [hasMySquad, setHasMySquad] = useState<boolean | null>(null);
   const [squadTabError, setSquadTabError] = useState<string | null>(null);
@@ -99,12 +97,11 @@ const ChallengePage = () => {
       setSquadRankingError(null);
       setSquadContributionError(null);
 
-      const [mySquadResult, rankingResult, squadListResult, contributionsResult, xpResult] = await Promise.allSettled([
+      const [mySquadResult, rankingResult, squadListResult, contributionsResult] = await Promise.allSettled([
         gamificationApi.getMySquad(),
         gamificationApi.getSquadRanking(),
         gamificationApi.getSquads(),
         gamificationApi.getMySquadContributions(),
-        gamificationApi.getMyXp(),
       ]);
 
       if (cancelled) return;
@@ -149,10 +146,6 @@ const ChallengePage = () => {
         setSquadContributionError("스쿼드 기여도 정보를 불러오지 못했어요.");
       }
 
-      if (xpResult.status === "fulfilled") {
-        setMyXp(xpResult.value);
-      }
-
       setSquadLoading(false);
       setSquadLoaded(true);
     };
@@ -195,10 +188,10 @@ const ChallengePage = () => {
   const myContributionPercentile = useMemo(() => {
     if (!Array.isArray(squadContributions) || squadContributions.length === 0) return 50;
     const totalMembers = squadContributions.length;
-    const myRanking = squadContributions.find((c) => c.nickname === myXp?.nickname)?.ranking
+    const myRanking = squadContributions[Math.ceil(totalMembers / 2) - 1]?.ranking
       ?? Math.ceil(totalMembers / 2);
     return (myRanking / totalMembers) * 100;
-  }, [myXp?.nickname, squadContributions]);
+  }, [squadContributions]);
 
   const renderJoinSquad = () => {
     const normalizedKeyword = squadSearchKeyword.trim().toLowerCase();
@@ -370,12 +363,6 @@ const ChallengePage = () => {
               학교별 주간 XP 순위와 팀 기여도를 확인하세요.
             </p>
           </div>
-          {myXp && (
-            <div className="rounded-lg bg-white border border-gray-200 px-5 py-3 text-right">
-              <p className="text-Caption_L_Light text-gray-400">내 XP</p>
-              <p className="text-Subtitle_L_Medium text-main-1">{myXp.totalXp.toLocaleString()} XP</p>
-            </div>
-          )}
         </div>
 
         {squadLoading || hasMySquad === null ? (
@@ -418,7 +405,7 @@ const ChallengePage = () => {
         onClose={() => setShowContributionModal(false)}
         variant="contribution"
         contributionItems={squadContributions}
-        myNickname={myXp?.nickname}
+        myNickname={undefined}
       />
     </div>
   );

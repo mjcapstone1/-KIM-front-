@@ -69,7 +69,7 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
   // 대학 랭킹 variant
   if (variant === "university") {
     const sorted = [...squadRankingItems].sort(
-      (a, b) => a.currentRanking - b.currentRanking
+      (a, b) => (b.returnRate ?? 0) - (a.returnRate ?? 0)
     );
     const filtered = searchQuery
       ? sorted.filter((item) =>
@@ -118,8 +118,9 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
           {/* 스크롤 목록 */}
           <div ref={listRef} className="flex-1 overflow-y-auto px-6 pb-2">
             <div className="flex flex-col gap-2">
-              {filtered.map((item) => {
-                const medal = getRankMedal(item.currentRanking);
+            {filtered.map((item, index) => {
+                const rank = index + 1;
+                const medal = getRankMedal(rank);
                 const isMySquad = item.squadId === mySquadId;
 
                 return (
@@ -135,7 +136,7 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
                   >
                     <div className="flex items-center gap-4">
                       <span className="text-Body_M_Light text-black w-8 text-center font-medium">
-                        {medal ?? `#${item.currentRanking}`}
+                        {medal ?? `#${rank}`}
                       </span>
                       <div className="size-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-bold">
                         {item.squadName.substring(0, 1)}
@@ -150,13 +151,13 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
                           )}
                         </span>
                         <span className="text-Caption_L_Light text-gray-400">
-                          {item.weeklyXp.toLocaleString()} XP
+                          수익률 {(item.returnRate ?? 0).toFixed(1)}%
                         </span>
                       </div>
                     </div>
                     <span className="text-Body_M_Light text-black font-medium">
-                      {item.weeklyXpChangeRate >= 0 ? "+" : ""}
-                      {item.weeklyXpChangeRate.toFixed(1)}%
+                      {(item.returnRate ?? 0) >= 0 ? "+" : ""}
+                      {(item.returnRate ?? 0).toFixed(1)}%
                     </span>
                   </div>
                 );

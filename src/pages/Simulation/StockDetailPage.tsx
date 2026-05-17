@@ -254,7 +254,7 @@ const StockDetailPage = () => {
         <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-4">
           <button
             type="button"
-            onClick={() => navigate("/home")}
+            onClick={() => navigate("/simulation")}
             className="mb-4 flex items-center gap-1.5 text-sm text-[#909193] transition-colors hover:text-[#1D1E20]"
           >
             <ArrowLeftIcon className="h-4 w-4" />

@@ -10,6 +10,7 @@ export type SquadRankingItem = {
   weeklyXp: number;
   weeklyXpChangeRate: number;
   rankingChange: number;
+  returnRate?: number;
 };
 
 export type SquadContributionItem = {
@@ -93,6 +94,7 @@ const normalizeSquadRankingItem = (item: Record<string, unknown>, index: number)
     weeklyXp,
     weeklyXpChangeRate: readNumber(item.weeklyXpChangeRate ?? item.groupReturnRate, 0),
     rankingChange: readNumber(item.rankingChange, 0),
+    returnRate: typeof item.returnRate === "number" ? item.returnRate : undefined,
   };
 };
 

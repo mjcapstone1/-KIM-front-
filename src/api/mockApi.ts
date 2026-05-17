@@ -96,9 +96,9 @@ const discussions = [
 ];
 
 const squadRanking = [
-  { squadId: 1, squadName: "Universion", currentRanking: 1, totalXp: 18420, weeklyXp: 3250, weeklyXpChangeRate: 12.4, rankingChange: 1 },
-  { squadId: 2, squadName: "FinTech Lab", currentRanking: 2, totalXp: 16900, weeklyXp: 3010, weeklyXpChangeRate: 8.2, rankingChange: -1 },
-  { squadId: 3, squadName: "Data Investors", currentRanking: 3, totalXp: 14200, weeklyXp: 2440, weeklyXpChangeRate: 4.6, rankingChange: 0 },
+  { squadId: 1, squadName: "Universion", currentRanking: 1, totalXp: 18420, weeklyXp: 3250, weeklyXpChangeRate: 12.4, rankingChange: 1, returnRate: 18.4 },
+  { squadId: 2, squadName: "FinTech Lab", currentRanking: 2, totalXp: 16900, weeklyXp: 3010, weeklyXpChangeRate: 8.2, rankingChange: -1, returnRate: 12.7 },
+  { squadId: 3, squadName: "Data Investors", currentRanking: 3, totalXp: 14200, weeklyXp: 2440, weeklyXpChangeRate: 4.6, rankingChange: 0, returnRate: 7.3 },
 ];
 
 function ok<T>(config: InternalAxiosRequestConfig, data: T, status = 200): AxiosResponse<T> {
