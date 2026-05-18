@@ -9,6 +9,8 @@ import EyeIcon from "@/assets/svgs/EyeIcon";
 import { authApi } from "@/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 
+const removeCredentialSpaces = (value: string) => value.replace(/[\s\u00a0\u200b-\u200d\ufeff]/g, "");
+
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,9 +31,13 @@ const LoginPage: React.FC = () => {
 
   const handleLocalLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = removeCredentialSpaces(email);
+    const normalizedPassword = removeCredentialSpaces(password);
+    setEmail(normalizedEmail);
+    setPassword(normalizedPassword);
     setIsLoading(true);
     try {
-      const response = await authApi.login({ email, password });
+      const response = await authApi.login({ email: normalizedEmail, password: normalizedPassword });
       setTokens(response.data);
       navigate(from, { replace: true });
     } catch (error: unknown) {
@@ -64,7 +70,7 @@ const LoginPage: React.FC = () => {
             type="email"
             placeholder="이메일"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(removeCredentialSpaces(e.target.value))}
             leftIcon={<EmailIcon className="size-[24px] text-gray-400" />}
             fullWidth
           />
@@ -72,7 +78,7 @@ const LoginPage: React.FC = () => {
             type={showPassword ? "text" : "password"}
             placeholder="비밀번호"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => setPassword(removeCredentialSpaces(e.target.value))}
             leftIcon={<LockIcon className="size-[24px] text-gray-400" />}
             rightIcon={<EyeIcon />}
             onRightIconClick={() => setShowPassword(!showPassword)}
