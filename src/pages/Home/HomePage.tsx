@@ -19,7 +19,7 @@ import {
   useDailySparklines,
   useMarketStatus,
 } from "@/hooks/useMarketQueries";
-import type { StockId, StockWithPrice } from "@/api/market";
+import type { StockWithPrice } from "@/api/market";
 import { toNumericStockId } from "@/api/market";
 import { useMarketStore, useQuote } from "@/store/useMarketStore";
 import MiniSparkline from "@/components/TradingVolumeRank/MiniSparkline";
@@ -45,7 +45,7 @@ type FilterType = "거래대금" | "거래량" | "급상승" | "급하락";
 
 const ECONOMY_NEWS_PAGE_SIZE = 20;
 const RANK_GRID_CLASS = "grid-cols-[44px_minmax(150px,1fr)_108px_118px_132px_100px]";
-const SPARKLINE_PREFETCH_LIMIT = 40;
+const SPARKLINE_PREFETCH_LIMIT = 80;
 const REALTIME_SUBSCRIBE_LIMIT = 100;
 
 function formatRelativeTime(dateStr?: string | null): string {
@@ -72,13 +72,44 @@ interface RealTimeStockRowProps {
   activeFilter: FilterType;
   onSelect: () => void;
   sparklineValues?: number[];
+  sparklineKey: string;
+  onSparklineVisible: (stockId: string) => void;
 }
 
-const RealTimeStockRow = memo(({ stock, rank, isSelected, isMarketOpen, activeFilter, onSelect, sparklineValues }: RealTimeStockRowProps) => {
+const RealTimeStockRow = memo(({
+  stock,
+  rank,
+  isSelected,
+  isMarketOpen,
+  activeFilter,
+  onSelect,
+  sparklineValues,
+  sparklineKey,
+  onSparklineVisible,
+}: RealTimeStockRowProps) => {
   const realtimeStockId = toNumericStockId(stock.stockId) ?? -1;
   const quote = useQuote(realtimeStockId);
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const prevChangePctRef = useRef<number | null>(null);
   const [changeFlashToken, setChangeFlashToken] = useState(0);
+
+  useEffect(() => {
+    const node = rowRef.current;
+    if (!node || !sparklineKey) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          onSparklineVisible(sparklineKey);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "360px 0px", threshold: 0.01 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onSparklineVisible, sparklineKey]);
 
   useEffect(() => {
     if (!isMarketOpen || !quote) {
@@ -148,12 +179,13 @@ const RealTimeStockRow = memo(({ stock, rank, isSelected, isMarketOpen, activeFi
         );
   const tradingValue = value > 0 ? value : price * volume;
   const metricText = activeFilter === "거래량"
-    ? formatVolume(volume)
-    : formatTradingValue(tradingValue);
+    ? (volume > 0 ? formatVolume(volume) : price > 0 ? "거래 없음" : "수집중")
+    : (tradingValue > 0 ? formatTradingValue(tradingValue) : price > 0 ? "거래 없음" : "수집중");
   const priceText = price > 0 ? formatPrice(price) : "수집중";
 
   return (
     <TradingVolumeRank
+      rowRef={rowRef}
       rank={rank}
       stockName={stock.name}
       ticker={stock.symbol}
@@ -173,6 +205,7 @@ const RealTimeStockRow = memo(({ stock, rank, isSelected, isMarketOpen, activeFi
 });
 
 const HomePage: React.FC = () => {
+  const [visibleSparklineIds, setVisibleSparklineIds] = useState<Set<string>>(() => new Set());
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"popular" | "personal">("popular");
   const [activeFilter, setActiveFilter] = useState<FilterType>("거래대금");
@@ -321,14 +354,17 @@ const HomePage: React.FC = () => {
 
   const sparklineStockIds = useMemo(() => {
     if (!isLoading && !isError && displayStockData.length > 0) {
-      return Array.from(
-        new Set(
-          displayStockData
-            .slice(0, SPARKLINE_PREFETCH_LIMIT)
-            .map((stock) => stock.stockId || stock.symbol)
-            .filter((stockId): stockId is StockId => String(stockId ?? "").trim().length > 0)
-        )
-      );
+      const stockIds = new Set<string>();
+      displayStockData
+        .slice(0, SPARKLINE_PREFETCH_LIMIT)
+        .forEach((stock) => {
+          const stockId = String(stock.stockId || stock.symbol || "").trim();
+          if (stockId) stockIds.add(stockId);
+        });
+      visibleSparklineIds.forEach((stockId) => {
+        if (stockId.trim()) stockIds.add(stockId);
+      });
+      return Array.from(stockIds);
     }
 
     if (showMockFallback) {
@@ -342,9 +378,19 @@ const HomePage: React.FC = () => {
     }
 
     return [];
-  }, [isLoading, isError, displayStockData, showMockFallback]);
+  }, [isLoading, isError, displayStockData, showMockFallback, visibleSparklineIds]);
 
   const { dataByStockId: dailySparklineByStockId } = useDailySparklines(sparklineStockIds);
+  const requestSparkline = useCallback((stockId: string) => {
+    const normalized = stockId.trim();
+    if (!normalized) return;
+    setVisibleSparklineIds((prev) => {
+      if (prev.has(normalized)) return prev;
+      const next = new Set(prev);
+      next.add(normalized);
+      return next;
+    });
+  }, []);
 
   const { subscribe, unsubscribe } = useMarketStore();
 
@@ -546,6 +592,8 @@ const HomePage: React.FC = () => {
                   isMarketOpen={isMarketOpen}
                   activeFilter={activeFilter}
                   sparklineValues={dailySparklineByStockId.get(sparklineKey)}
+                  sparklineKey={sparklineKey}
+                  onSparklineVisible={requestSparkline}
                   onSelect={() => {
                     setSelectedStock({
                       name: stock.name,

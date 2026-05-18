@@ -30,6 +30,8 @@ export interface TradingVolumeRankProps {
   onClick?: () => void;
   /** 등락률 업데이트 플래시 토큰 */
   changeFlashToken?: number;
+  /** 부모에서 노출 감지를 연결할 때 사용하는 row ref */
+  rowRef?: React.Ref<HTMLDivElement>;
 }
 
 export const TradingVolumeRank = ({
@@ -43,6 +45,7 @@ export const TradingVolumeRank = ({
   className,
   onClick,
   changeFlashToken,
+  rowRef,
 }: TradingVolumeRankProps) => {
   // 등락률의 부호 확인 (양수면 빨간색, 음수면 파란색)
   const isPositive = changeRate.startsWith("+");
@@ -53,6 +56,7 @@ export const TradingVolumeRank = ({
 
   return (
     <div
+      ref={rowRef}
       className={cn(
         `grid ${RANK_GRID_CLASS} items-center gap-3 w-full px-6 py-[14px] border-b border-gray-200 border-solid`,
         onClick && "cursor-pointer",
