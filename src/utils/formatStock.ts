@@ -16,19 +16,27 @@ export function formatChangeRate(rate: number): string {
 }
 
 export function formatTradingValue(value: number): string {
-  if (value >= 1_0000_0000_0000) {
-    return `${(value / 1_0000_0000_0000).toFixed(0)}조`;
+  const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0;
+  if (safeValue <= 0) {
+    return "-";
   }
-  if (value >= 1_0000_0000) {
-    return `${Math.round(value / 1_0000_0000).toLocaleString("ko-KR")}억`;
+  if (safeValue >= 1_0000_0000_0000) {
+    const jo = safeValue / 1_0000_0000_0000;
+    return `${jo >= 10 ? jo.toFixed(0) : jo.toFixed(1)}조`;
   }
-  if (value >= 1_0000) {
-    return `${Math.round(value / 1_0000).toLocaleString("ko-KR")}만`;
+  if (safeValue >= 1_0000_0000) {
+    return `${Math.round(safeValue / 1_0000_0000).toLocaleString("ko-KR")}억`;
   }
-  return value.toLocaleString("ko-KR");
+  if (safeValue >= 1_0000) {
+    return `${Math.round(safeValue / 1_0000).toLocaleString("ko-KR")}만`;
+  }
+  return safeValue.toLocaleString("ko-KR");
 }
 
 export function formatVolume(volume: number): string {
+  if (!Number.isFinite(volume) || volume <= 0) {
+    return "-";
+  }
   if (volume >= 1_000_000) {
     return `${(volume / 1_000_000).toFixed(1)}M`;
   }

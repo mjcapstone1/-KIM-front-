@@ -135,7 +135,7 @@ const LandingPage = () => {
           <div className="landing-nav-menu" style={{ display: "flex", alignItems: "center", gap: 32 }}>
             <button type="button" className="landing-nav-link" onClick={() => go("/")} style={{ border: 0, background: "transparent", padding: 0 }}>시작페이지</button>
             <button type="button" className="landing-nav-link" onClick={() => go("/home")} style={{ border: 0, background: "transparent", padding: 0 }}>홈</button>
-            <button type="button" className="landing-nav-link" onClick={() => go("/simulation/1")} style={{ border: 0, background: "transparent", padding: 0 }}>투자 시뮬레이터</button>
+            <button type="button" className="landing-nav-link" onClick={() => go("/simulation")} style={{ border: 0, background: "transparent", padding: 0 }}>투자 시뮬레이터</button>
             <button type="button" className="landing-nav-link" onClick={() => go("/ai-learning")} style={{ border: 0, background: "transparent", padding: 0 }}>AI 학습</button>
             {tokens ? (
               <button type="button" onClick={() => go("/home")} style={{ border: 0, background: "#1D1E20", color: "#fff", borderRadius: 999, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>앱으로 이동</button>

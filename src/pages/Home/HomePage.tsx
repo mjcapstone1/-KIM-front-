@@ -7,7 +7,7 @@ import {
   Chip,
 } from "@/components";
 import { cn } from "@/utils/cn";
-import { formatPrice, formatChangeRate, formatTradingValue } from "@/utils/formatStock";
+import { formatPrice, formatChangeRate, formatTradingValue, formatVolume } from "@/utils/formatStock";
 import { newsApi, type NaverEconomyNewsItem } from "@/api/news";
 import {
   useTopByValue,
@@ -44,6 +44,9 @@ const MOCK_FALLBACK = [
 type FilterType = "거래대금" | "거래량" | "급상승" | "급하락";
 
 const ECONOMY_NEWS_PAGE_SIZE = 20;
+const RANK_GRID_CLASS = "grid-cols-[44px_minmax(150px,1fr)_108px_118px_132px_100px]";
+const SPARKLINE_PREFETCH_LIMIT = 40;
+const REALTIME_SUBSCRIBE_LIMIT = 100;
 
 function formatRelativeTime(dateStr?: string | null): string {
   if (!dateStr) return "날짜 없음";
@@ -66,11 +69,12 @@ interface RealTimeStockRowProps {
   rank: number;
   isSelected: boolean;
   isMarketOpen: boolean;
+  activeFilter: FilterType;
   onSelect: () => void;
   sparklineValues?: number[];
 }
 
-const RealTimeStockRow = memo(({ stock, rank, isSelected, isMarketOpen, onSelect, sparklineValues }: RealTimeStockRowProps) => {
+const RealTimeStockRow = memo(({ stock, rank, isSelected, isMarketOpen, activeFilter, onSelect, sparklineValues }: RealTimeStockRowProps) => {
   const realtimeStockId = toNumericStockId(stock.stockId) ?? -1;
   const quote = useQuote(realtimeStockId);
   const prevChangePctRef = useRef<number | null>(null);
@@ -131,15 +135,31 @@ const RealTimeStockRow = memo(({ stock, rank, isSelected, isMarketOpen, onSelect
           (stock as any).tradingValue ??
           0
         );
+  const volume =
+    isMarketOpen
+      ? (
+          quote?.volume ??
+          stock.volume ??
+          0
+        )
+      : (
+          stock.volume ??
+          0
+        );
+  const tradingValue = value > 0 ? value : price * volume;
+  const metricText = activeFilter === "거래량"
+    ? formatVolume(volume)
+    : formatTradingValue(tradingValue);
+  const priceText = price > 0 ? formatPrice(price) : "수집중";
 
   return (
     <TradingVolumeRank
       rank={rank}
       stockName={stock.name}
       ticker={stock.symbol}
-      currentPrice={formatPrice(price)}
+      currentPrice={priceText}
       changeRate={formatChangeRate(changePct)}
-      tradingVolume={formatTradingValue(value)}
+      tradingVolume={metricText}
       changeFlashToken={changeFlashToken}
       chart={
         sparklineValues && sparklineValues.length >= 2
@@ -269,21 +289,42 @@ const HomePage: React.FC = () => {
   const isLoading = activeQuery.isLoading;
   const isError = activeQuery.isError;
   const stockData = activeQuery.data;
+  const displayMetricLabel = activeFilter === "거래량" ? "거래량" : "거래대금";
+  const displayStockData = useMemo(() => {
+    if (!stockData || stockData.length === 0) return [];
+    const rows = [...stockData];
+    if (activeTab === "popular") {
+      rows.sort((a, b) => {
+        if (activeFilter === "거래량") return (b.volume ?? 0) - (a.volume ?? 0);
+        if (activeFilter === "급상승") return (b.prevDayChangePct ?? 0) - (a.prevDayChangePct ?? 0);
+        if (activeFilter === "급하락") {
+          const aDrop = Math.max(0, -(a.prevDayChangePct ?? 0));
+          const bDrop = Math.max(0, -(b.prevDayChangePct ?? 0));
+          return bDrop - aDrop || (a.prevDayChangePct ?? 0) - (b.prevDayChangePct ?? 0);
+        }
+        const aValue = a.value > 0 ? a.value : a.close * a.volume;
+        const bValue = b.value > 0 ? b.value : b.close * b.volume;
+        return bValue - aValue;
+      });
+    }
+    return rows;
+  }, [activeFilter, activeTab, stockData]);
   const showMockFallback =
     activeTab === "popular" &&
-    (isError || (!isLoading && (!stockData || stockData.length === 0)));
+    (isError || (!isLoading && displayStockData.length === 0));
   const showPersonalEmpty =
     activeTab === "personal" &&
     !isLoading &&
     !isError &&
-    (!stockData || stockData.length === 0);
+    displayStockData.length === 0;
   const showPersonalError = activeTab === "personal" && isError;
 
   const sparklineStockIds = useMemo(() => {
-    if (!isLoading && !isError && stockData && stockData.length > 0) {
+    if (!isLoading && !isError && displayStockData.length > 0) {
       return Array.from(
         new Set(
-          stockData
+          displayStockData
+            .slice(0, SPARKLINE_PREFETCH_LIMIT)
             .map((stock) => toNumericStockId(stock.stockId))
             .filter((stockId): stockId is number => stockId != null)
         )
@@ -301,7 +342,7 @@ const HomePage: React.FC = () => {
     }
 
     return [];
-  }, [isLoading, isError, stockData, showMockFallback]);
+  }, [isLoading, isError, displayStockData, showMockFallback]);
 
   const { dataByStockId: dailySparklineByStockId } = useDailySparklines(sparklineStockIds);
 
@@ -309,8 +350,9 @@ const HomePage: React.FC = () => {
 
   // 장 열림 시에만 화면에 표시되는 종목들 웹소켓 구독
   useEffect(() => {
-    if (!isMarketOpen || !stockData || stockData.length === 0) return;
-    const stockIds = stockData
+    if (!isMarketOpen || displayStockData.length === 0) return;
+    const stockIds = displayStockData
+      .slice(0, REALTIME_SUBSCRIBE_LIMIT)
       .map((stock) => toNumericStockId(stock.stockId))
       .filter((stockId): stockId is number => stockId != null);
     if (stockIds.length === 0) return;
@@ -318,7 +360,7 @@ const HomePage: React.FC = () => {
     return () => {
       unsubscribe(stockIds);
     };
-  }, [stockData, isMarketOpen, subscribe, unsubscribe]);
+  }, [displayStockData, isMarketOpen, subscribe, unsubscribe]);
 
   // 우측 산업 테마 섹션 데이터
   const industryThemesQuery = useIndustryThemes();
@@ -377,7 +419,7 @@ const HomePage: React.FC = () => {
 
       <main className="max-w-full mx-auto flex min-h-[calc(100vh-160px)]">
         {/* 2. 실시간 거래 대금 리스트 (좌측) */}
-        <section className="w-[600px] border-r border-gray-200 flex flex-col shrink-0">
+        <section className="w-[760px] border-r border-gray-200 flex max-h-[calc(100vh-80px)] flex-col shrink-0">
           <div className="flex flex-col gap-4 px-10 py-5">
             <h2 className="text-[20px] font-medium text-black">실시간 거래 대금</h2>
 
@@ -418,17 +460,17 @@ const HomePage: React.FC = () => {
           </div>
 
           {/* 종목 리스트 테이블 헤더 (TradingVolumeRank 너비에 맞춰 조정) */}
-          <div className="flex border-y text-Body_M_Light border-gray-200 py-2 text-sm text-black">
-            <span className="w-[87px] text-center">순위</span>
-            <span className="w-[120px]">종목명</span>
-            <span className="w-[62px] text-right">현재가</span>
-            <span className="w-[120px] text-right px-5">등락률</span>
-            <span className="w-[104px] text-right">거래대금</span>
-            <span className="w-[78px] text-center">차트</span>
+          <div className={cn("grid items-center gap-3 border-y border-gray-200 px-6 py-2 text-sm text-black", RANK_GRID_CLASS)}>
+            <span className="text-center">순위</span>
+            <span>종목명</span>
+            <span className="text-right">현재가</span>
+            <span className="text-right">등락률</span>
+            <span className="text-right">{displayMetricLabel}</span>
+            <span className="text-center">차트</span>
           </div>
 
           {/* 리스트 아이템 */}
-          <div className="flex flex-col">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             {isLoading && (
               <>
                 {Array.from({ length: 10 }).map((_, i) => (
@@ -490,7 +532,7 @@ const HomePage: React.FC = () => {
                 개인 소유 종목 데이터가 없습니다.
               </p>
             )}
-            {!isLoading && !isError && stockData && stockData.length > 0 && stockData.map((stock: StockWithPrice, index: number) => {
+            {!isLoading && !isError && displayStockData.length > 0 && displayStockData.map((stock: StockWithPrice, index: number) => {
               const tickerText = stock.symbol || "-";
               const selectedKey = stock.symbol || String(stock.stockId);
               const sparklineStockId = toNumericStockId(stock.stockId);
@@ -502,6 +544,7 @@ const HomePage: React.FC = () => {
                   rank={index + 1}
                   isSelected={selectedStock.ticker === selectedKey}
                   isMarketOpen={isMarketOpen}
+                  activeFilter={activeFilter}
                   sparklineValues={sparklineStockId == null ? undefined : dailySparklineByStockId.get(sparklineStockId)}
                   onSelect={() => {
                     setSelectedStock({

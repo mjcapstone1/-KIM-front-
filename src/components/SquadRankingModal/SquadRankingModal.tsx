@@ -4,6 +4,7 @@ import CloseIcon from "@/assets/svgs/CloseIcon";
 import SearchIcon from "@/assets/svgs/SearchIcon";
 import type { SquadRankingItem, SquadContributionItem } from "@/api/gamification";
 import { getRankMedal } from "@/components/SquadRanking/SquadRanking";
+import { formatReturnRate } from "@/utils/formatReturnRate";
 
 type SquadRankingModalVariant = "university" | "contribution";
 
@@ -24,7 +25,7 @@ const VARIANT_CONFIG = {
     scrollButtonLabel: "내 학교로 이동",
   },
   contribution: {
-    title: "기여도 랭킹",
+    title: "수익률 랭킹",
     searchPlaceholder: "닉네임 검색",
     scrollButtonLabel: "내 순위로 이동",
   },
@@ -187,7 +188,7 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
   }
 
   // 기여도 variant
-  const sorted = [...contributionItems].sort((a, b) => a.ranking - b.ranking);
+  const sorted = [...contributionItems].sort((a, b) => b.returnRate - a.returnRate);
   const filtered = searchQuery
     ? sorted.filter((item) =>
         item.nickname.toLowerCase().includes(searchQuery.toLowerCase())
@@ -235,7 +236,8 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
         {/* 스크롤 목록 */}
         <div ref={listRef} className="flex-1 overflow-y-auto px-6 pb-2">
           <div className="flex flex-col gap-2">
-            {filtered.map((item) => {
+            {filtered.map((item, index) => {
+              const rank = index + 1;
               const isMe = item.nickname === myNickname;
 
               return (
@@ -251,9 +253,9 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-Body_M_Light text-black w-8 text-center font-medium">
-                      {item.ranking <= 3
-                        ? getRankMedal(item.ranking)
-                        : `#${item.ranking}`}
+                      {rank <= 3
+                        ? getRankMedal(rank)
+                        : `#${rank}`}
                     </span>
                     <div className="size-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-bold">
                       {item.nickname.substring(0, 1)}
@@ -268,7 +270,7 @@ export const SquadRankingModal: React.FC<SquadRankingModalProps> = ({
                     </span>
                   </div>
                   <span className="text-Body_M_Light text-main-1 font-bold">
-                    +{item.weeklyContributionXp.toLocaleString()} XP
+                    {formatReturnRate(item.returnRate)}
                   </span>
                 </div>
               );

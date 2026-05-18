@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "@/utils/cn";
+import { formatReturnRate } from "@/utils/formatReturnRate";
 import type { SquadRankingItem } from "@/api/gamification";
 
 export interface SquadWeeklyBattleProps {
@@ -13,12 +14,14 @@ export const SquadWeeklyBattle: React.FC<SquadWeeklyBattleProps> = ({
   rivalSquad,
   className,
 }) => {
-  const myXp = mySquad.weeklyXp;
-  const rivalXp = rivalSquad?.weeklyXp ?? 0;
-  const maxXp = Math.max(myXp, rivalXp, 1);
-  const myPercent = (myXp / maxXp) * 100;
-  const rivalPercent = (rivalXp / maxXp) * 100;
-  const xpDiff = myXp - rivalXp;
+  const myReturnRate = mySquad.returnRate ?? mySquad.weeklyXpChangeRate ?? 0;
+  const rivalReturnRate = rivalSquad?.returnRate ?? rivalSquad?.weeklyXpChangeRate ?? 0;
+  const minReturnRate = Math.min(myReturnRate, rivalReturnRate, 0);
+  const maxReturnRate = Math.max(myReturnRate, rivalReturnRate, 1);
+  const returnRateRange = Math.max(maxReturnRate - minReturnRate, 1);
+  const myPercent = ((myReturnRate - minReturnRate) / returnRateRange) * 100;
+  const rivalPercent = ((rivalReturnRate - minReturnRate) / returnRateRange) * 100;
+  const returnRateDiff = myReturnRate - rivalReturnRate;
 
   return (
     <div className={cn("bg-white rounded-lg p-6 shadow-sm border border-gray-200", className)}>
@@ -34,7 +37,7 @@ export const SquadWeeklyBattle: React.FC<SquadWeeklyBattleProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-Body_M_Light text-black font-medium">{mySquad.squadName}</span>
             <span className="text-Body_M_Light text-main-1 font-bold">
-              {myXp.toLocaleString()} XP
+              {formatReturnRate(myReturnRate)}
             </span>
           </div>
           <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -58,7 +61,7 @@ export const SquadWeeklyBattle: React.FC<SquadWeeklyBattleProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-Body_M_Light text-black font-medium">{rivalSquad.squadName}</span>
               <span className="text-Body_M_Light text-gray-400 font-bold">
-                {rivalXp.toLocaleString()} XP
+                {formatReturnRate(rivalReturnRate)}
               </span>
             </div>
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -77,13 +80,13 @@ export const SquadWeeklyBattle: React.FC<SquadWeeklyBattleProps> = ({
 
       {/* 점수 차이 메시지 */}
       <div className="mt-6 text-center">
-        {xpDiff > 0 ? (
+        {returnRateDiff > 0 ? (
           <p className="text-Body_M_Light text-main-1">
-            🎉 <span className="font-bold">{xpDiff.toLocaleString()} XP</span> 앞서고 있어요!
+            🎉 <span className="font-bold">{formatReturnRate(returnRateDiff)}</span> 앞서고 있어요!
           </p>
-        ) : xpDiff < 0 ? (
+        ) : returnRateDiff < 0 ? (
           <p className="text-Body_M_Light text-etc-red">
-            😤 <span className="font-bold">{Math.abs(xpDiff).toLocaleString()} XP</span> 뒤처지고 있어요!
+            😤 <span className="font-bold">{Math.abs(returnRateDiff).toFixed(2)}%</span> 뒤처지고 있어요!
           </p>
         ) : (
           <p className="text-Body_M_Light text-gray-400">

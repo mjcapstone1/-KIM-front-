@@ -17,6 +17,8 @@ export type SquadContributionItem = {
   nickname: string;
   ranking: number;
   weeklyContributionXp: number;
+  returnRate: number;
+  stockReturnRate?: number;
 };
 
 export type MyXpInfo = {
@@ -132,6 +134,24 @@ const normalizeMySquadInfo = (data: unknown): MySquadInfo | null => {
   };
 };
 
+const normalizeSquadContributionItem = (item: Record<string, unknown>, index: number): SquadContributionItem | null => {
+  const nickname = String(item.nickname ?? item.name ?? item.userName ?? item.username ?? "");
+  if (!nickname) return null;
+
+  const returnRate = readNumber(
+    item.returnRate ?? item.stockReturnRate ?? item.totalReturnRate ?? item.weeklyContributionXp,
+    0,
+  );
+
+  return {
+    nickname,
+    ranking: readNumber(item.ranking ?? item.rank, index + 1),
+    weeklyContributionXp: readNumber(item.weeklyContributionXp, returnRate),
+    returnRate,
+    stockReturnRate: readNumber(item.stockReturnRate, returnRate),
+  };
+};
+
 // 백엔드가 배열을 래핑해서 반환할 수 있으므로 안전하게 추출
 function unwrapArray<T>(data: unknown, depth = 0): T[] {
   if (Array.isArray(data)) return data;
@@ -167,7 +187,9 @@ export const gamificationApi = {
   /** 내 스쿼드 기여도 조회: GET /xp/squads/contributions/me */
   getMySquadContributions: async (): Promise<SquadContributionItem[]> => {
     const res = await gamificationApiClient.get("/xp/squads/contributions/me");
-    return unwrapArray<SquadContributionItem>(res.data);
+    return unwrapArray<Record<string, unknown>>(res.data)
+      .map((item, index) => normalizeSquadContributionItem(item, index))
+      .filter((item): item is SquadContributionItem => item != null);
   },
 
   /** 내 XP 정보 조회: GET /xp/me */

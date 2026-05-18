@@ -342,7 +342,11 @@ function handleMock(config: InternalAxiosRequestConfig): AxiosResponse<unknown> 
   if (path === "/study/metrics/me") return ok(config, { xpEarned: 1200, timeSpentMinutes: 85, lastPingAt: new Date().toISOString() });
 
   if (path === "/xp/squads/ranking") return ok(config, squadRanking);
-  if (path === "/xp/squads/contributions/me") return ok(config, [{ nickname: "이재이", ranking: 1, weeklyContributionXp: 920 }, { nickname: "팀원A", ranking: 2, weeklyContributionXp: 710 }, { nickname: "팀원B", ranking: 3, weeklyContributionXp: 630 }]);
+  if (path === "/xp/squads/contributions/me") return ok(config, [
+    { nickname: "이재이", ranking: 1, weeklyContributionXp: 8.24, returnRate: 8.24, stockReturnRate: 8.24 },
+    { nickname: "팀원A", ranking: 2, weeklyContributionXp: 5.68, returnRate: 5.68, stockReturnRate: 5.68 },
+    { nickname: "팀원B", ranking: 3, weeklyContributionXp: 3.02, returnRate: 3.02, stockReturnRate: 3.02 },
+  ]);
   if (path === "/xp/me") return ok(config, { userId: mockUser.userId, nickname: mockUser.nickname, totalXp: 1840, level: 4 });
   if (path === "/xp/users/ranking") return ok(config, [{ userId: mockUser.userId, nickname: mockUser.nickname, ranking: 1, currentXp: 1840, periodXp: 320, previousPeriodXp: 280, growthRate: 14.2 }]);
   if (path === "/squads") return ok(config, squadRanking.map((item) => ({ squadId: item.squadId, squadName: item.squadName, region: "서울", currentRanking: item.currentRanking, totalXp: item.totalXp })));

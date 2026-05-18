@@ -210,7 +210,7 @@ const ChallengePage = () => {
             <div className="flex flex-col gap-2">
               <h1 className="text-[30px] leading-[38px] font-bold text-[#12212A]">스쿼드 챌린지</h1>
               <p className="text-sm text-[#4D6A77]">
-                같은 학교 유저들과 함께 활동하고 주간 XP 랭킹을 확인하세요.
+                같은 학교 유저들과 함께 주식 수익률 랭킹을 확인하세요.
               </p>
             </div>
             <div className="inline-flex items-center rounded-full bg-white px-4 py-2 border border-[#C9EDE5]">
@@ -321,11 +321,11 @@ const ChallengePage = () => {
           />
         ) : (
           <SquadFallbackCard
-            title={squadContributionError ? "기여도 데이터를 불러오지 못했어요" : "이번 주 기여도 집계 전이에요"}
+            title={squadContributionError ? "수익률 데이터를 불러오지 못했어요" : "이번 주 수익률 집계 전이에요"}
             description={
               squadContributionError
                 ? "잠시 후 다시 시도해 주세요."
-                : "스쿼드 활동이 누적되면 MVP 랭킹이 표시됩니다."
+                : "스쿼드 수익률이 집계되면 MVP 랭킹이 표시됩니다."
             }
             actionLabel="다시 시도"
             onAction={refetchSquadData}
@@ -360,7 +360,7 @@ const ChallengePage = () => {
           <div>
             <h1 className="text-Headline_L_Bold text-black">스쿼드 챌린지</h1>
             <p className="mt-2 text-Body_M_Light text-gray-400">
-              학교별 주간 XP 순위와 팀 기여도를 확인하세요.
+              학교별 주식 수익률 순위와 팀 수익률을 확인하세요.
             </p>
           </div>
         </div>

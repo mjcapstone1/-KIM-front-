@@ -144,12 +144,35 @@ type RawStockListItem = Record<string, unknown> & {
   displayName?: string;
   canonicalName?: string;
   categoryId?: number | string;
+  currentPrice?: number | string;
+  change?: number | string;
+  tradingValue?: number | string;
 };
 
 function toNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
     const parsed = Number(value.replace(/,/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+    const sanitized = value.replace(/,/g, "").replace(/[^0-9.+-]/g, "");
+    if (!sanitized) return fallback;
+    const sanitizedParsed = Number(sanitized);
+    return Number.isFinite(sanitizedParsed) ? sanitizedParsed : fallback;
+  }
+  return fallback;
+}
+
+function toKoreanMoneyNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const text = value.replace(/,/g, "").trim();
+    const numeric = Number(text.replace(/[^0-9.+-]/g, ""));
+    if (!Number.isFinite(numeric)) return fallback;
+    if (text.includes("천억")) return numeric * 100_000_000_000;
+    if (text.includes("조")) return numeric * 1_000_000_000_000;
+    if (text.includes("억")) return numeric * 100_000_000;
+    if (text.includes("만")) return numeric * 10_000;
+    const parsed = Number(text);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
   return fallback;
@@ -263,14 +286,17 @@ type RawStockClosingPrice = Record<string, unknown> & {
 };
 
 function normalizeClosingPrice(item: RawStockClosingPrice): StockClosingPrice {
+  const close = toNumber(item.close ?? item.closingPrice ?? item.price);
+  const volume = toNumber(item.volume);
+  const value = toKoreanMoneyNumber(item.value ?? item.tradeValue);
   return {
     stockId: normalizeStockId(item.stockId ?? item.id),
     stockName: String(item.stockName ?? item.name ?? ""),
     at: String(item.at ?? item.fetchedAt ?? ""),
-    close: toNumber(item.close ?? item.closingPrice ?? item.price),
+    close,
     prevDayChangePct: toNumber(item.prevDayChangePct ?? item.changeRate),
-    volume: toNumber(item.volume),
-    value: toNumber(item.value ?? item.tradeValue),
+    volume,
+    value: value > 0 ? value : close * volume,
   };
 }
 
@@ -322,16 +348,19 @@ export interface CandleResponse {
 
 function normalizeStockWithPrice(item: RawStockListItem & RawStockClosingPrice): StockWithPrice {
   const stock = normalizeStockListItem(item);
+  const close = toNumber(item.close ?? item.closingPrice ?? item.currentPrice ?? item.price);
+  const volume = toNumber(item.volume);
+  const value = toKoreanMoneyNumber(item.value ?? item.tradeValue ?? item.tradingValue);
 
   return {
     stockId: stock.stockId,
     symbol: stock.symbol,
     name: stock.name,
     categoryId: stock.categoryId,
-    close: toNumber(item.close ?? item.closingPrice ?? item.price),
-    prevDayChangePct: toNumber(item.prevDayChangePct ?? item.changeRate),
-    volume: toNumber(item.volume),
-    value: toNumber(item.value ?? item.tradeValue),
+    close,
+    prevDayChangePct: toPercentNumber(item.prevDayChangePct ?? item.changeRate ?? item.change),
+    volume,
+    value: value > 0 ? value : close * volume,
   };
 }
 
@@ -486,72 +515,46 @@ export async function fetchCandles(
 
 // --- Stock List APIs ---
 
+const TOP_RANKING_LIMIT = 5000;
+
 export async function fetchTopRising(): Promise<StockWithPrice[]> {
 
-  const res = await marketApi.get<RawStockListItem[]>(
-    "/market/stocks/top-rising"
+  const res = await marketApi.get<Array<RawStockListItem & RawStockClosingPrice>>(
+    "/market/stocks/top-rising",
+    { params: { limit: TOP_RANKING_LIMIT } },
   );
 
-  const stocks = res.data
-    .map(normalizeStockListItem)
-    .filter((item) => hasStockId(item.stockId));
-
-  const prices = await fetchClosingPrices(
-    stocks.map((s) => s.stockId)
-  );
-
-  return mergeStockData(stocks, prices);
+  return res.data.map(normalizeStockWithPrice).filter((item) => hasStockId(item.stockId));
 }
 
 export async function fetchTopFalling(): Promise<StockWithPrice[]> {
 
-  const res = await marketApi.get<RawStockListItem[]>(
-    "/market/stocks/top-falling"
+  const res = await marketApi.get<Array<RawStockListItem & RawStockClosingPrice>>(
+    "/market/stocks/top-falling",
+    { params: { limit: TOP_RANKING_LIMIT } },
   );
 
-  const stocks = res.data
-    .map(normalizeStockListItem)
-    .filter((item) => hasStockId(item.stockId));
-
-  const prices = await fetchClosingPrices(
-    stocks.map((s) => s.stockId)
-  );
-
-  return mergeStockData(stocks, prices);
+  return res.data.map(normalizeStockWithPrice).filter((item) => hasStockId(item.stockId));
 }
 
 export async function fetchTopByVolume(): Promise<StockWithPrice[]> {
 
-  const res = await marketApi.get<RawStockListItem[]>(
-    "/market/stocks/top-by-volume"
+  const res = await marketApi.get<Array<RawStockListItem & RawStockClosingPrice>>(
+    "/market/stocks/top-by-volume",
+    { params: { limit: TOP_RANKING_LIMIT } },
   );
 
-  const stocks = res.data
-    .map(normalizeStockListItem)
-    .filter((item) => hasStockId(item.stockId));
-
-  const prices = await fetchClosingPrices(
-    stocks.map((s) => s.stockId)
-  );
-
-  return mergeStockData(stocks, prices);
+  return res.data.map(normalizeStockWithPrice).filter((item) => hasStockId(item.stockId));
 }
 
 export async function fetchTopByValue(): Promise<StockWithPrice[]> {
 
-  const res = await marketApi.get<RawStockListItem[]>(
-    "/market/stocks/top-by-value"
+  const res = await marketApi.get<Array<RawStockListItem & RawStockClosingPrice>>(
+    "/market/stocks/top-by-value",
+    { params: { limit: TOP_RANKING_LIMIT } },
   );
 
-  const stocks = res.data
-    .map(normalizeStockListItem)
-    .filter((item) => hasStockId(item.stockId));
-
-  const prices = await fetchClosingPrices(
-    stocks.map((s) => s.stockId)
-  );
-
-  return mergeStockData(stocks, prices);
+  return res.data.map(normalizeStockWithPrice).filter((item) => hasStockId(item.stockId));
 }
 
 export async function searchStocks(
@@ -794,7 +797,7 @@ export function mergeStockData(
       close: price?.close ?? 0,
       prevDayChangePct: price?.prevDayChangePct ?? 0,
       volume: price?.volume ?? 0,
-      value: price?.value ?? 0,
+      value: price?.value && price.value > 0 ? price.value : (price?.close ?? 0) * (price?.volume ?? 0),
     };
   });
 }

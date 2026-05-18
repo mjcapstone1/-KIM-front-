@@ -52,10 +52,10 @@ const profileDetails: Record<InvestmentType, { emoji: string; summary: string; f
   },
 };
 
-const tabItems: Array<{ key: AILearningTab; label: string; icon: string }> = [
-  { key: "curriculum", label: "학습 과정", icon: "학습" },
-  { key: "profile", label: "나의 투자 성향", icon: "성향" },
-  { key: "tutor", label: "AI 튜터", icon: "AI" },
+const tabItems: Array<{ key: AILearningTab; label: string }> = [
+  { key: "curriculum", label: "학습 과정" },
+  { key: "profile", label: "나의 투자 성향" },
+  { key: "tutor", label: "AI 튜터" },
 ];
 
 const AILearningPage = () => {
@@ -132,7 +132,6 @@ const AILearningPage = () => {
                     : "border-transparent text-[#A5A6A9] hover:bg-gray-50 hover:text-[#444441]"
                 }`}
               >
-                <span>{tab.icon}</span>
                 {tab.label}
               </button>
             ))}

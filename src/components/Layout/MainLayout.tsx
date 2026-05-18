@@ -5,7 +5,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 const MENU_ROUTES: Record<string, string> = {
   "홈": "/home",
-  "투자 시뮬레이터": "/simulation/1",
+  "투자 시뮬레이터": "/simulation",
   "AI 학습": "/ai-learning",
   "챌린지": "/challenge",
 };

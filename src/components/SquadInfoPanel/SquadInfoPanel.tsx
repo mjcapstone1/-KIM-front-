@@ -55,7 +55,7 @@ export const SquadInfoPanel: React.FC<SquadInfoPanelProps> = ({
         </div>
 
         <div className="flex flex-col gap-1 p-4 rounded-lg border border-sub-blue bg-white">
-          <span className="text-Caption_L_Light text-gray-400">내 기여도</span>
+          <span className="text-Caption_L_Light text-gray-400">내 수익률 위치</span>
           <span className="text-Subtitle_M_Medium text-sub-blue font-bold">
             상위 {myContributionPercentile.toFixed(0)}%
           </span>

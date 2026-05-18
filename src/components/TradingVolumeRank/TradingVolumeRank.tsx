@@ -8,6 +8,8 @@ const COLORS = {
   "etc-blue": "#001AFF",
 } as const;
 
+const RANK_GRID_CLASS = "grid-cols-[44px_minmax(150px,1fr)_108px_118px_132px_100px]";
+
 export interface TradingVolumeRankProps {
   /** 순위 */
   rank: number;
@@ -53,7 +55,7 @@ export const TradingVolumeRank = ({
   return (
     <div
       className={cn(
-        "flex  items-start w-full py-[10px] border-b border-gray-300 border-solid",
+        `grid ${RANK_GRID_CLASS} items-center gap-3 w-full px-6 py-[14px] border-b border-gray-200 border-solid`,
         onClick && "cursor-pointer",
         className
       )}
@@ -63,32 +65,32 @@ export const TradingVolumeRank = ({
       aria-label={`${rank}위: ${stockName} (${ticker}) - ${currentPrice}, ${changeRate}, ${tradingVolume}`}
     >
       {/* 순위 */}
-      <div className="flex flex-col h-[47px] items-center justify-center pl-[40px] shrink-0 w-[87px]">
-        <p className="flex-1 text-Body_M_Light text-black w-full">
+      <div className="flex items-center justify-center">
+        <p className="text-Body_M_Light text-black text-center w-full">
           {rank}
         </p>
       </div>
 
       {/* 종목명 */}
-      <div className="flex flex-col items-start shrink-0 w-[120px]">
-        <p className="text-Body_M_Light text-black w-full">
+      <div className="flex min-w-0 flex-col items-start">
+        <p className="text-Body_M_Light text-black w-full truncate">
           {stockName}
         </p>
         {/* #747474 => 300으로 되어있어서 인라인 style로 */}
-        <p className="text-Caption_M_Light w-full" style={{ color: "#747474" }}>
+        <p className="text-Caption_M_Light w-full truncate" style={{ color: "#747474" }}>
           {ticker}
         </p>
       </div>
 
       {/* 현재가 */}
-      <div className="flex flex-col items-center justify-center shrink-0 w-[62px]">
+      <div className="flex items-center justify-end">
         <p className="text-Body_M_Light text-black text-right w-full whitespace-nowrap">
           {currentPrice}
         </p>
       </div>
 
       {/* 등락률 */}
-      <div className="flex items-start pl-[45px] pr-[20px] shrink-0 w-[120px]">
+      <div className="flex items-center justify-end">
         <div className="relative inline-flex items-start gap-[4px] rounded-md px-1 py-[1px]">
           {changeFlashToken != null && changeFlashToken > 0 && (
             <div
@@ -112,14 +114,14 @@ export const TradingVolumeRank = ({
       </div>
 
       {/* 거래대금 */}
-      <div className="flex items-center justify-center pl-[36px] shrink-0 w-[104px]">
+      <div className="flex items-center justify-end">
         <p className="text-Body_M_Light text-black text-right whitespace-nowrap">
           {tradingVolume}
         </p>
       </div>
 
       {/* 차트 */}
-      <div className="h-[47px] shrink-0 w-[78px] py-[10px]">
+      <div className="h-[44px] w-[100px] justify-self-end overflow-hidden py-[8px]">
         {chart || (
           <LineChartIcon
             color={iconColor}
@@ -138,39 +140,39 @@ export const TradingVolumeRankSkeleton = ({ className }: { className?: string })
   return (
     <div
       className={cn(
-        "flex items-start w-full py-[10px] border-b border-gray-300 border-solid animate-pulse",
+        `grid ${RANK_GRID_CLASS} items-center gap-3 w-full px-6 py-[14px] border-b border-gray-200 border-solid animate-pulse`,
         className
       )}
     >
       {/* 순위 */}
-      <div className="flex flex-col h-[47px] items-center justify-center pl-[40px] shrink-0 w-[87px]">
+      <div className="flex items-center justify-center">
         <div className="h-4 w-6 bg-gray-200 rounded" />
       </div>
 
       {/* 종목명 */}
-      <div className="flex flex-col items-start shrink-0 w-[120px] gap-1">
+      <div className="flex min-w-0 flex-col items-start gap-1">
         <div className="h-4 w-16 bg-gray-200 rounded" />
         <div className="h-3 w-12 bg-gray-100 rounded" />
       </div>
 
       {/* 현재가 */}
-      <div className="flex flex-col items-center justify-center shrink-0 w-[62px]">
+      <div className="flex items-center justify-end">
         <div className="h-4 w-14 bg-gray-200 rounded" />
       </div>
 
       {/* 등락률 */}
-      <div className="flex gap-[4px] items-start pl-[45px] pr-[20px] shrink-0 w-[120px]">
+      <div className="flex gap-[4px] items-center justify-end">
         <div className="h-6 w-6 bg-gray-200 rounded" />
         <div className="h-4 w-12 bg-gray-200 rounded" />
       </div>
 
       {/* 거래대금 */}
-      <div className="flex items-center justify-center pl-[36px] shrink-0 w-[104px]">
+      <div className="flex items-center justify-end">
         <div className="h-4 w-12 bg-gray-200 rounded" />
       </div>
 
       {/* 차트 */}
-      <div className="h-[47px] shrink-0 w-[78px] py-[10px]">
+      <div className="h-[44px] w-[100px] justify-self-end py-[8px]">
         <div className="w-full h-full bg-gray-200 rounded" />
       </div>
     </div>

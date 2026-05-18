@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "@/utils/cn";
+import { formatReturnRate } from "@/utils/formatReturnRate";
 import type { SquadContributionItem } from "@/api/gamification";
 
 export interface SquadMVPProps {
@@ -11,7 +12,7 @@ export interface SquadMVPProps {
 const INITIAL_DISPLAY_COUNT = 3;
 
 export const SquadMVP: React.FC<SquadMVPProps> = ({ items, onViewAll, className }) => {
-  const sorted = [...items].sort((a, b) => a.ranking - b.ranking);
+  const sorted = [...items].sort((a, b) => b.returnRate - a.returnRate);
   const displayItems = sorted.slice(0, INITIAL_DISPLAY_COUNT);
 
   return (
@@ -30,23 +31,25 @@ export const SquadMVP: React.FC<SquadMVPProps> = ({ items, onViewAll, className 
           </button>
         )}
       </div>
-      <p className="text-Caption_L_Light text-gray-400 mb-6">이번 주 기여도 랭킹</p>
+      <p className="text-Caption_L_Light text-gray-400 mb-6">이번 주 수익률 랭킹</p>
 
       <div className="flex flex-col gap-3">
-        {displayItems.map((item) => (
+        {displayItems.map((item, index) => {
+          const rank = index + 1;
+          return (
           <div
             key={item.nickname}
             className="flex items-center justify-between p-3 rounded-lg border border-transparent hover:bg-gray-50 transition-all"
           >
             <div className="flex items-center gap-4">
               <span className="text-Body_M_Light text-black w-8 text-center font-medium">
-                {item.ranking <= 3
-                  ? item.ranking === 1
+                {rank <= 3
+                  ? rank === 1
                     ? "🥇"
-                    : item.ranking === 2
+                    : rank === 2
                     ? "🥈"
                     : "🥉"
-                  : `#${item.ranking}`}
+                  : `#${rank}`}
               </span>
               <div className="size-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-bold">
                 {item.nickname.substring(0, 1)}
@@ -56,10 +59,11 @@ export const SquadMVP: React.FC<SquadMVPProps> = ({ items, onViewAll, className 
               </span>
             </div>
             <span className="text-Body_M_Light text-main-1 font-bold">
-              +{item.weeklyContributionXp.toLocaleString()} XP
+              {formatReturnRate(item.returnRate)}
             </span>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

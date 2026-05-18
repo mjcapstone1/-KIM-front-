@@ -44,21 +44,17 @@ export function useMarketStatus() {
 
 // --- 홈페이지용 훅 (상위 10개 기본값 + 장중 WebSocket 반영) ---
 
-async function fetchTop10WithPrices(
-  fetcher: () => Promise<import("@/api/market").StockListItem[]>,
-  _isMarketOpen: boolean,
+async function fetchTopRankings(
+  fetcher: () => Promise<import("@/api/market").StockWithPrice[]>,
 ) {
   const stocks = await fetcher();
-  const top10 = stocks.slice(0, 10);
-  if (top10.length === 0) return [];
-  const prices = await fetchClosingPrices(top10.map((stock) => stock.stockId));
-  return mergeStockData(top10, prices);
+  return stocks.filter((stock) => stock.close > 0 || stock.value > 0 || stock.volume > 0);
 }
 
 export function useTopByValue(isMarketOpen: boolean) {
   return useQuery({
     queryKey: ["market", "top-by-value", isMarketOpen],
-    queryFn: () => fetchTop10WithPrices(fetchTopByValue, isMarketOpen),
+    queryFn: () => fetchTopRankings(fetchTopByValue),
     staleTime: 30_000,
   });
 }
@@ -66,7 +62,7 @@ export function useTopByValue(isMarketOpen: boolean) {
 export function useTopByVolume(isMarketOpen: boolean) {
   return useQuery({
     queryKey: ["market", "top-by-volume", isMarketOpen],
-    queryFn: () => fetchTop10WithPrices(fetchTopByVolume, isMarketOpen),
+    queryFn: () => fetchTopRankings(fetchTopByVolume),
     staleTime: 30_000,
   });
 }
@@ -74,7 +70,7 @@ export function useTopByVolume(isMarketOpen: boolean) {
 export function useTopRising(isMarketOpen: boolean) {
   return useQuery({
     queryKey: ["market", "top-rising", isMarketOpen],
-    queryFn: () => fetchTop10WithPrices(fetchTopRising, isMarketOpen),
+    queryFn: () => fetchTopRankings(fetchTopRising),
     staleTime: 30_000,
   });
 }
@@ -82,7 +78,7 @@ export function useTopRising(isMarketOpen: boolean) {
 export function useTopFalling(isMarketOpen: boolean) {
   return useQuery({
     queryKey: ["market", "top-falling", isMarketOpen],
-    queryFn: () => fetchTop10WithPrices(fetchTopFalling, isMarketOpen),
+    queryFn: () => fetchTopRankings(fetchTopFalling),
     staleTime: 30_000,
   });
 }
