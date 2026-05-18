@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authApi } from "@/api/auth";
 import { searchAll, type SearchLearningResult, type SearchStockResult } from "@/api/search";
+import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/utils/cn";
 
 export interface HeaderProps {
@@ -25,13 +27,6 @@ const SearchIcon = () => (
   </svg>
 );
 
-const BellIcon = () => (
-  <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
 const ArrowUpIcon = () => (
   <svg aria-hidden="true" className="h-4 w-4 text-[#42D6BA]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="m6 15 6-6 6 6" />
@@ -45,12 +40,15 @@ export const Header: React.FC<HeaderProps> = ({
   className,
 }) => {
   const navigate = useNavigate();
+  const tokens = useAuthStore((state) => state.tokens);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
   const [query, setQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [matchedStocks, setMatchedStocks] = useState<SearchStockResult[]>([]);
   const [matchedLearning, setMatchedLearning] = useState<SearchLearningResult[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [hasSearchError, setHasSearchError] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
   const normalizedQuery = query.trim();
 
@@ -134,6 +132,21 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const hasSearchResult = matchedStocks.length > 0 || matchedLearning.length > 0;
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    try {
+      await authApi.logout();
+    } catch {
+      // 서버 세션 정리에 실패해도 프론트 토큰은 반드시 제거해서 사용자를 로그아웃시킵니다.
+    } finally {
+      clearAuth();
+      setIsLoggingOut(false);
+      navigate("/login", { replace: true });
+    }
+  };
 
   return (
     <header
@@ -257,12 +270,17 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        <button type="button" className="rounded-xl p-2.5 transition-colors hover:bg-gray-100" aria-label="알림">
-          <span className="relative block text-[#909193]">
-            <BellIcon />
-            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#FF0000]" />
-          </span>
-        </button>
+        {tokens && (
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={isLoggingOut}
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-[#696969] transition-all hover:border-[#42D6BA] hover:bg-[#C7F3EB]/40 hover:text-[#1D1E20] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="로그아웃"
+          >
+            {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
+          </button>
+        )}
       </div>
     </header>
   );

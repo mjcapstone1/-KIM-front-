@@ -8,7 +8,6 @@ import LockIcon from "@/assets/svgs/LockIcon";
 import EyeIcon from "@/assets/svgs/EyeIcon";
 import { authApi } from "@/api/auth";
 import { useAuthStore } from "@/store/useAuthStore";
-import { mockLoginAccount } from "@/api/mockApi";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,11 +44,6 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const fillMockAccount = () => {
-    setEmail(mockLoginAccount.email);
-    setPassword(mockLoginAccount.password);
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4 font-noto">
       <div className="w-full max-w-[480px] bg-white px-[56px] py-[75px] shadow-[0px_5px_15px_0px_rgba(0,0,0,0.25)] rounded-lg">
@@ -66,16 +60,6 @@ const LoginPage: React.FC = () => {
 
         {/* Local Login Form */}
         <form onSubmit={handleLocalLogin} className="flex flex-col gap-[12px] mb-[24px]">
-          <button
-            type="button"
-            onClick={fillMockAccount}
-            className="mb-2 rounded-lg border border-[#42d6ba]/40 bg-[#42d6ba]/10 px-4 py-3 text-left text-sm text-[#1D1E20] transition-colors hover:bg-[#42d6ba]/15"
-          >
-            <span className="block font-semibold">로컬 테스트 로그인 계정</span>
-            <span className="mt-1 block text-xs text-gray-500">
-              {mockLoginAccount.email} / {mockLoginAccount.password}
-            </span>
-          </button>
           <TextField
             type="email"
             placeholder="이메일"
