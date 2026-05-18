@@ -10,10 +10,13 @@ export type TradeId = string;
 export interface TransactionRequest {
   stockId: StockId;
   amount: number;
+  quantity?: number;
   price: number;
   portfolioId: number;
   tradeType: "NORMAL" | "RESERVED";
   transactionType: TransactionType;
+  priceType?: "market" | "limit" | "scheduled";
+  type?: "buy" | "sell";
 }
 
 export interface TradeResponse {

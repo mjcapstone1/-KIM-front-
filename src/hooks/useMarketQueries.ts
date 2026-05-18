@@ -271,7 +271,7 @@ export function useStockCandles(stockId: StockId | undefined, period: ChartPerio
   });
 }
 
-export function useDailySparklines(stockIds: number[], pointLimit = 20) {
+export function useDailySparklines(stockIds: StockId[], pointLimit = 20) {
   const queries = useQueries({
     queries: stockIds.map((stockId) => ({
       queryKey: ["market", "stock-sparkline", "daily", stockId, pointLimit],
@@ -282,16 +282,16 @@ export function useDailySparklines(stockIds: number[], pointLimit = 20) {
           .map((c) => c.close)
           .filter((value) => Number.isFinite(value));
       },
-      enabled: stockId > 0,
+      enabled: String(stockId).trim().length > 0,
       staleTime: 60_000,
     })),
   });
 
   const dataByStockId = useMemo(() => {
-    const map = new Map<number, number[]>();
+    const map = new Map<string, number[]>();
     queries.forEach((query, index) => {
       if (query.data && query.data.length > 0) {
-        map.set(stockIds[index], query.data);
+        map.set(String(stockIds[index]), query.data);
       }
     });
     return map;

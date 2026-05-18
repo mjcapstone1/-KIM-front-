@@ -4,6 +4,9 @@ export type WalletBalance = {
   walletId: number;
   userId: string; // UUID
   balance: number;
+  reservedBalance?: number;
+  withdrawableBalance?: number;
+  availableUsd?: number;
 };
 
 export const walletApi = {

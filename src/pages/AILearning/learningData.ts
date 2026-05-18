@@ -149,17 +149,65 @@ export const lessonContent = Object.values(learningCurriculum)
     return acc;
   }, {});
 
-export const getCompletedLessons = () => {
+type LearningUser = {
+  userId?: string | null;
+  email?: string | null;
+} | null | undefined;
+
+const LEGACY_INVESTMENT_TYPE_KEY = "investmentType";
+const LEGACY_COMPLETED_LESSONS_KEY = "completedLessons";
+const LEARNING_STORAGE_PREFIX = "aiLearning";
+
+export const getLearningStorageScope = (user?: LearningUser) => {
+  const raw = user?.userId || user?.email || "anonymous";
+  return String(raw).trim().replace(/[^a-zA-Z0-9_.@-]/g, "_") || "anonymous";
+};
+
+const investmentTypeKey = (scope = "anonymous") => `${LEARNING_STORAGE_PREFIX}:${scope}:investmentType`;
+const completedLessonsKey = (scope = "anonymous") => `${LEARNING_STORAGE_PREFIX}:${scope}:completedLessons`;
+
+export const readInvestmentType = (scope = "anonymous"): InvestmentType | null => {
+  const value = localStorage.getItem(investmentTypeKey(scope));
+  return value === "stable" || value === "balanced" || value === "aggressive" || value === "daytrader"
+    ? value
+    : null;
+};
+
+export const saveInvestmentType = (type: InvestmentType | null, scope = "anonymous") => {
+  if (type) {
+    localStorage.setItem(investmentTypeKey(scope), type);
+  } else {
+    localStorage.removeItem(investmentTypeKey(scope));
+  }
+};
+
+export const getCompletedLessons = (scope = "anonymous") => {
   try {
-    const parsed = JSON.parse(localStorage.getItem("completedLessons") || "[]");
+    const parsed = JSON.parse(localStorage.getItem(completedLessonsKey(scope)) || "[]");
     return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
   } catch {
     return [];
   }
 };
 
-export const isLearningCompleted = (type: InvestmentType | null) => {
+export const saveCompletedLessons = (lessons: string[], scope = "anonymous") => {
+  localStorage.setItem(completedLessonsKey(scope), JSON.stringify(lessons));
+};
+
+export const resetCompletedLessonsForType = (type: InvestmentType, scope = "anonymous") => {
+  const typeLessonIds = new Set(learningCurriculum[type].map((lesson) => lesson.id));
+  const next = getCompletedLessons(scope).filter((lessonId) => !typeLessonIds.has(lessonId));
+  saveCompletedLessons(next, scope);
+  return next;
+};
+
+export const clearLegacyLearningStorage = () => {
+  localStorage.removeItem(LEGACY_INVESTMENT_TYPE_KEY);
+  localStorage.removeItem(LEGACY_COMPLETED_LESSONS_KEY);
+};
+
+export const isLearningCompleted = (type: InvestmentType | null, scope = "anonymous") => {
   if (!type) return false;
-  const completed = getCompletedLessons();
+  const completed = getCompletedLessons(scope);
   return learningCurriculum[type].every((lesson) => completed.includes(lesson.id));
 };

@@ -1,6 +1,5 @@
 import { cn } from "@/utils/cn";
 import ChangeRateIcon from "@/assets/svgs/ChangeRateIcon";
-import LineChartIcon from "@/assets/svgs/LineChartIcon";
 
 // Tailwind etc 색상 값 (tailwind.config.js와 동일)
 const COLORS = {
@@ -123,12 +122,9 @@ export const TradingVolumeRank = ({
       {/* 차트 */}
       <div className="h-[44px] w-[100px] justify-self-end overflow-hidden py-[8px]">
         {chart || (
-          <LineChartIcon
-            color={iconColor}
-            direction={iconDirection}
-            className="w-full h-full"
-            ariaLabel="거래대금 차트"
-          />
+          <div className="flex h-full w-full items-center justify-end text-Caption_M_Light text-gray-400">
+            수집중
+          </div>
         )}
       </div>
     </div>

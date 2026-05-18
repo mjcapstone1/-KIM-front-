@@ -319,18 +319,12 @@ const StockDetailPage = () => {
       </div>
 
       <div className="w-[30%] overflow-y-auto border-l border-gray-100 bg-white">
-        {stockIdNum != null ? (
-          <OrderPanel
-            currentPrice={currentPrice}
-            stockId={stockIdNum}
-            stockName={selectedStock?.name ?? "종목"}
-            currency="KRW"
-          />
-        ) : (
-          <div className="p-6 text-sm text-[#909193]">
-            이 종목은 문자열 종목 ID를 사용하고 있어 주문 패널은 준비 중입니다.
-          </div>
-        )}
+        <OrderPanel
+          currentPrice={currentPrice}
+          stockId={resolvedStockId}
+          stockName={selectedStock?.name ?? "종목"}
+          currency="KRW"
+        />
       </div>
     </div>
   );

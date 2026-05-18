@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AITutorPanel from "./components/AITutorPanel";
 import InvestmentTypeModal from "./components/InvestmentTypeModal";
@@ -6,21 +6,21 @@ import LearningProgressPanel from "./components/LearningProgressPanel";
 import LessonViewerModal from "./components/LessonViewerModal";
 import { BotIcon } from "./components/TutorIcons";
 import {
+  clearLegacyLearningStorage,
   getCompletedLessons,
+  getLearningStorageScope,
   investmentTypes,
   learningCurriculum,
+  readInvestmentType,
+  resetCompletedLessonsForType,
+  saveCompletedLessons,
+  saveInvestmentType,
   type InvestmentType,
   type LessonStep,
 } from "./learningData";
+import { useAuthStore } from "@/store/useAuthStore";
 
 type AILearningTab = "curriculum" | "profile" | "tutor";
-
-const readInvestmentType = (): InvestmentType | null => {
-  const value = localStorage.getItem("investmentType");
-  return value === "stable" || value === "balanced" || value === "aggressive" || value === "daytrader"
-    ? value
-    : null;
-};
 
 const typeLabels: Record<InvestmentType, string> = {
   stable: "안정형",
@@ -60,12 +60,24 @@ const tabItems: Array<{ key: AILearningTab; label: string }> = [
 
 const AILearningPage = () => {
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const learningScope = useMemo(() => getLearningStorageScope(user), [user]);
   const [activeTab, setActiveTab] = useState<AILearningTab>("curriculum");
-  const [selectedType, setSelectedType] = useState<InvestmentType | null>(() => readInvestmentType());
-  const [draftType, setDraftType] = useState<InvestmentType | null>(() => readInvestmentType());
-  const [showTypeModal, setShowTypeModal] = useState(() => !readInvestmentType());
+  const [selectedType, setSelectedType] = useState<InvestmentType | null>(() => readInvestmentType(getLearningStorageScope(useAuthStore.getState().user)));
+  const [draftType, setDraftType] = useState<InvestmentType | null>(() => readInvestmentType(getLearningStorageScope(useAuthStore.getState().user)));
+  const [showTypeModal, setShowTypeModal] = useState(() => !readInvestmentType(getLearningStorageScope(useAuthStore.getState().user)));
   const [selectedLesson, setSelectedLesson] = useState<LessonStep | null>(null);
-  const [completedLessons, setCompletedLessons] = useState<string[]>(() => getCompletedLessons());
+  const [completedLessons, setCompletedLessons] = useState<string[]>(() => getCompletedLessons(getLearningStorageScope(useAuthStore.getState().user)));
+
+  useEffect(() => {
+    clearLegacyLearningStorage();
+    const storedType = readInvestmentType(learningScope);
+    setSelectedType(storedType);
+    setDraftType(storedType);
+    setCompletedLessons(getCompletedLessons(learningScope));
+    setShowTypeModal(!storedType);
+    setSelectedLesson(null);
+  }, [learningScope]);
 
   const completedCount = useMemo(() => {
     if (!selectedType) return 0;
@@ -75,14 +87,17 @@ const AILearningPage = () => {
 
   const confirmType = () => {
     if (!draftType) return;
-    localStorage.setItem("investmentType", draftType);
+    saveInvestmentType(draftType, learningScope);
+    const nextCompleted = resetCompletedLessonsForType(draftType, learningScope);
     setSelectedType(draftType);
+    setCompletedLessons(nextCompleted);
+    setSelectedLesson(null);
     setActiveTab("curriculum");
     setShowTypeModal(false);
   };
 
   const skipType = () => {
-    localStorage.setItem("investmentType", "none");
+    saveInvestmentType(null, learningScope);
     setSelectedType(null);
     setShowTypeModal(false);
   };
@@ -92,7 +107,7 @@ const AILearningPage = () => {
 
     setCompletedLessons((prev) => {
       const next = prev.includes(selectedLesson.id) ? prev : [...prev, selectedLesson.id];
-      localStorage.setItem("completedLessons", JSON.stringify(next));
+      saveCompletedLessons(next, learningScope);
       return next;
     });
 

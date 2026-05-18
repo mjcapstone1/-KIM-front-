@@ -1,10 +1,13 @@
 import { useState } from "react";
+import type { PortfolioAsset } from "@/api/asset";
 import { formatVolume, formatWon, type SimStock } from "../simMarketTypes";
 
 type Tab = "favorites" | "holdings" | "scheduled" | "portfolio";
 
 interface PortfolioTabsPanelProps {
   stocks: SimStock[];
+  holdings: PortfolioAsset[];
+  isHoldingsLoading?: boolean;
   favorites: Set<string>;
   searchQuery: string;
   onSearchChange: (value: string) => void;
@@ -22,6 +25,13 @@ interface ScheduledOrder {
   createdAt: string;
 }
 
+type HoldingStock = SimStock & {
+  quantity: number;
+  avgPrice: number;
+  totalValue: number;
+  profitLoss: number;
+};
+
 const tabs: Array<{ key: Tab; label: string }> = [
   { key: "favorites", label: "관심 종목" },
   { key: "holdings", label: "보유 종목" },
@@ -29,13 +39,33 @@ const tabs: Array<{ key: Tab; label: string }> = [
   { key: "portfolio", label: "포트폴리오" },
 ];
 
-const buildHolding = (stock: SimStock, quantity: number, avgPrice: number) => ({
-  ...stock,
-  quantity,
-  avgPrice,
-  totalValue: stock.price * quantity,
-  profitLoss: (stock.price - avgPrice) * quantity,
-});
+const toNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toHoldingStock = (asset: PortfolioAsset, stocks: SimStock[]): HoldingStock => {
+  const ids = [asset.id, asset.stockId, asset.code].map((value) => String(value ?? "").trim());
+  const matchedStock = stocks.find((stock) => ids.includes(stock.id) || ids.includes(stock.code));
+  const quantity = toNumber(asset.quantity ?? asset.amount, 0);
+  const currentPrice = toNumber(asset.currentPrice, matchedStock?.price ?? 0);
+  const avgPrice = toNumber(asset.avgPrice, quantity > 0 ? asset.totalPrice / quantity : 0);
+  const totalValue = toNumber(asset.currentValue, currentPrice * quantity);
+  const invested = avgPrice * quantity;
+
+  return {
+    id: String(asset.stockId ?? asset.id),
+    name: asset.name,
+    code: asset.code ?? matchedStock?.code ?? String(asset.stockId ?? asset.id),
+    volume: matchedStock?.volume ?? 0,
+    price: currentPrice,
+    changeRate: matchedStock?.changeRate ?? 0,
+    quantity,
+    avgPrice,
+    totalValue,
+    profitLoss: totalValue - invested,
+  };
+};
 
 const StockRow = ({
   stock,
@@ -101,6 +131,8 @@ const StockRow = ({
 
 const PortfolioTabsPanel = ({
   stocks,
+  holdings: portfolioHoldings,
+  isHoldingsLoading = false,
   favorites,
   searchQuery,
   onSearchChange,
@@ -124,7 +156,9 @@ const PortfolioTabsPanel = ({
     return stock.name.toLowerCase().includes(query) || stock.code.toLowerCase().includes(query);
   });
   const favoriteStocks = stocks.filter((stock) => favorites.has(stock.id));
-  const holdings = stocks.slice(0, 2).map((stock) => buildHolding(stock, stock.id === "1" ? 10 : 5, stock.price));
+  const holdings = portfolioHoldings
+    .map((asset) => toHoldingStock(asset, stocks))
+    .filter((holding) => holding.quantity > 0);
   const totalHoldingValue = holdings.reduce((sum, stock) => sum + stock.totalValue, 0);
   const totalProfitLoss = holdings.reduce((sum, stock) => sum + stock.profitLoss, 0);
   const totalProfitLossRate = totalHoldingValue > 0
@@ -254,6 +288,9 @@ const PortfolioTabsPanel = ({
             </div>
           </div>
           <div className="max-h-[600px] divide-y divide-gray-100 overflow-y-auto">
+            {isHoldingsLoading && (
+              <div className="px-6 py-16 text-center text-sm text-[#909193]">보유 종목을 불러오는 중입니다.</div>
+            )}
             {holdings.map((holding) => (
               <button
                 key={holding.id}
@@ -274,11 +311,14 @@ const PortfolioTabsPanel = ({
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-[#909193]">평가액 {formatWon(holding.totalValue)}</div>
                   <div className={`text-sm font-medium ${holding.profitLoss >= 0 ? "text-[#00A63E]" : "text-[#FF0000]"}`}>
-                    {holding.profitLoss >= 0 ? "+" : ""}{formatWon(holding.profitLoss)} ({((holding.profitLoss / (holding.avgPrice * holding.quantity)) * 100).toFixed(2)}%)
+                    {holding.profitLoss >= 0 ? "+" : ""}{formatWon(holding.profitLoss)} ({(holding.avgPrice * holding.quantity > 0 ? (holding.profitLoss / (holding.avgPrice * holding.quantity)) * 100 : 0).toFixed(2)}%)
                   </div>
                 </div>
               </button>
             ))}
+            {!isHoldingsLoading && holdings.length === 0 && (
+              <div className="px-6 py-16 text-center text-sm text-[#909193]">아직 보유한 종목이 없습니다.</div>
+            )}
           </div>
         </section>
       )}
@@ -346,7 +386,7 @@ const PortfolioTabsPanel = ({
               <h3 className="mb-4 font-bold text-[#1D1E20]">종목별 비중</h3>
               <div className="space-y-3">
                 {holdings.map((holding) => {
-                  const percentage = (holding.totalValue / totalHoldingValue) * 100;
+                  const percentage = totalHoldingValue > 0 ? (holding.totalValue / totalHoldingValue) * 100 : 0;
                   return (
                     <div key={holding.id}>
                       <div className="mb-1 flex items-center justify-between text-sm">
@@ -359,6 +399,9 @@ const PortfolioTabsPanel = ({
                     </div>
                   );
                 })}
+                {holdings.length === 0 && (
+                  <div className="text-sm text-[#909193]">보유 종목이 생기면 비중이 표시됩니다.</div>
+                )}
               </div>
             </div>
 
@@ -366,7 +409,8 @@ const PortfolioTabsPanel = ({
               <h3 className="mb-4 font-bold text-[#1D1E20]">수익률 분석</h3>
               <div className="space-y-3">
                 {holdings.map((holding) => {
-                  const profitRate = (holding.profitLoss / (holding.avgPrice * holding.quantity)) * 100;
+                  const invested = holding.avgPrice * holding.quantity;
+                  const profitRate = invested > 0 ? (holding.profitLoss / invested) * 100 : 0;
                   return (
                     <div key={holding.id} className="flex items-center justify-between">
                       <span className="text-sm text-gray-700">{holding.name}</span>
@@ -376,6 +420,9 @@ const PortfolioTabsPanel = ({
                     </div>
                   );
                 })}
+                {holdings.length === 0 && (
+                  <div className="text-sm text-[#909193]">보유 종목이 생기면 수익률이 표시됩니다.</div>
+                )}
               </div>
             </div>
           </div>

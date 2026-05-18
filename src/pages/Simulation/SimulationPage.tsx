@@ -1,19 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { isLearningCompleted, type InvestmentType } from "@/pages/AILearning/learningData";
+import { getLearningStorageScope, isLearningCompleted, readInvestmentType, type InvestmentType } from "@/pages/AILearning/learningData";
 import PortfolioTabsPanel from "./components/PortfolioTabsPanel";
 import SimulatorGateModal from "./components/SimulatorGateModal";
 import StockTradeDetail from "./components/StockTradeDetail";
 import { formatWon, type SimStock } from "./simMarketTypes";
 import { useMarketStatus, useTopByVolumeWithPrices } from "@/hooks/useMarketQueries";
+import { useAssetAllocation, usePortfolioHoldings } from "@/hooks/usePortfolioQueries";
 import type { StockWithPrice } from "@/api/market";
-
-const readInvestmentType = (): InvestmentType | null => {
-  const value = localStorage.getItem("investmentType");
-  return value === "stable" || value === "balanced" || value === "aggressive" || value === "daytrader"
-    ? value
-    : null;
-};
+import { useAuthStore } from "@/store/useAuthStore";
 
 const toSimStock = (stock: StockWithPrice): SimStock => ({
   id: String(stock.stockId),
@@ -26,16 +21,33 @@ const toSimStock = (stock: StockWithPrice): SimStock => ({
 
 const SimulationPage = () => {
   const navigate = useNavigate();
-  const [investmentType] = useState<InvestmentType | null>(() => readInvestmentType());
-  const [showGate, setShowGate] = useState(() => !isLearningCompleted(readInvestmentType()));
+  const user = useAuthStore((state) => state.user);
+  const learningScope = useMemo(() => getLearningStorageScope(user), [user]);
+  const investmentType = useMemo<InvestmentType | null>(() => readInvestmentType(learningScope), [learningScope]);
+  const [showGate, setShowGate] = useState(() => !isLearningCompleted(readInvestmentType(getLearningStorageScope(useAuthStore.getState().user)), getLearningStorageScope(useAuthStore.getState().user)));
   const [selectedStock, setSelectedStock] = useState<SimStock | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
   const { isMarketOpen } = useMarketStatus();
   const stocksQuery = useTopByVolumeWithPrices(isMarketOpen);
+  const allocationQuery = useAssetAllocation();
+  const holdingsQuery = usePortfolioHoldings();
 
-  const canUseSimulator = useMemo(() => isLearningCompleted(investmentType), [investmentType]);
+  const canUseSimulator = useMemo(() => isLearningCompleted(investmentType, learningScope), [investmentType, learningScope]);
   const stocks = useMemo(() => (stocksQuery.data ?? []).map(toSimStock), [stocksQuery.data]);
+  const allocation = allocationQuery.data;
+  const changeAmount = allocation?.changeAmount ?? 0;
+  const changeRate = allocation?.changeRate ?? 0;
+  const isProfit = changeAmount >= 0;
+
+  const refreshPortfolio = () => {
+    void allocationQuery.refetch();
+    void holdingsQuery.refetch();
+  };
+
+  useEffect(() => {
+    setShowGate(!canUseSimulator);
+  }, [canUseSimulator]);
 
   const toggleFavorite = (stockId: string) => {
     setFavorites((prev) => {
@@ -82,23 +94,31 @@ const SimulationPage = () => {
     <div className="min-h-screen bg-white p-8">
       <div className="mx-auto max-w-7xl">
         {selectedStock ? (
-          <StockTradeDetail stock={selectedStock} onBack={() => setSelectedStock(null)} />
+          <StockTradeDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onTradeSuccess={refreshPortfolio} />
         ) : (
           <>
             <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
                 <p className="mb-2 text-sm text-[#909193]">보유 자산</p>
-                <p className="mb-1 text-3xl font-bold text-[#1D1E20]">₩{formatWon(10000000)}</p>
-                <p className="text-sm font-bold text-[#00A63E]">+5.2% (₩{formatWon(500000)})</p>
+                <p className="mb-1 text-3xl font-bold text-[#1D1E20]">
+                  {allocationQuery.isLoading ? "조회중..." : `₩${formatWon(allocation?.totalAmount ?? 0)}`}
+                </p>
+                <p className={`text-sm font-bold ${isProfit ? "text-[#00A63E]" : "text-[#001AFF]"}`}>
+                  {isProfit ? "+" : ""}{changeRate.toFixed(2)}% ({isProfit ? "+" : "-"}₩{formatWon(Math.abs(changeAmount))})
+                </p>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
                 <p className="mb-2 text-sm text-[#909193]">현금</p>
-                <p className="mb-1 text-3xl font-bold text-[#1D1E20]">₩{formatWon(3500000)}</p>
+                <p className="mb-1 text-3xl font-bold text-[#1D1E20]">
+                  {allocationQuery.isLoading ? "조회중..." : `₩${formatWon(allocation?.cashAmount ?? 0)}`}
+                </p>
                 <p className="text-sm text-[#909193]">투자 가능 금액</p>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
                 <p className="mb-2 text-sm text-[#909193]">수익률</p>
-                <p className="mb-1 text-3xl font-bold text-[#00A63E]">+12.5%</p>
+                <p className={`mb-1 text-3xl font-bold ${isProfit ? "text-[#00A63E]" : "text-[#001AFF]"}`}>
+                  {isProfit ? "+" : ""}{changeRate.toFixed(2)}%
+                </p>
                 <p className="text-sm text-[#909193]">전체 수익률</p>
               </div>
             </section>
@@ -115,6 +135,8 @@ const SimulationPage = () => {
             )}
             <PortfolioTabsPanel
               stocks={stocks}
+              holdings={holdingsQuery.data ?? []}
+              isHoldingsLoading={holdingsQuery.isLoading}
               favorites={favorites}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}

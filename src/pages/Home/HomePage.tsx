@@ -19,7 +19,7 @@ import {
   useDailySparklines,
   useMarketStatus,
 } from "@/hooks/useMarketQueries";
-import type { StockWithPrice } from "@/api/market";
+import type { StockId, StockWithPrice } from "@/api/market";
 import { toNumericStockId } from "@/api/market";
 import { useMarketStore, useQuote } from "@/store/useMarketStore";
 import MiniSparkline from "@/components/TradingVolumeRank/MiniSparkline";
@@ -325,8 +325,8 @@ const HomePage: React.FC = () => {
         new Set(
           displayStockData
             .slice(0, SPARKLINE_PREFETCH_LIMIT)
-            .map((stock) => toNumericStockId(stock.stockId))
-            .filter((stockId): stockId is number => stockId != null)
+            .map((stock) => stock.stockId || stock.symbol)
+            .filter((stockId): stockId is StockId => String(stockId ?? "").trim().length > 0)
         )
       );
     }
@@ -335,8 +335,8 @@ const HomePage: React.FC = () => {
       return Array.from(
         new Set(
           MOCK_FALLBACK
-            .map((stock) => Number(stock.ticker))
-            .filter((stockId) => Number.isFinite(stockId))
+            .map((stock) => stock.ticker)
+            .filter((stockId) => stockId.trim().length > 0)
         )
       );
     }
@@ -480,7 +480,7 @@ const HomePage: React.FC = () => {
             )}
             {showMockFallback &&
               MOCK_FALLBACK.map((stock) => {
-                const mockStockId = Number(stock.ticker);
+                const mockStockId = stock.ticker;
                 return (
                   <TradingVolumeRank
                     key={stock.ticker}
@@ -491,7 +491,7 @@ const HomePage: React.FC = () => {
                     changeRate={stock.change}
                     tradingVolume={stock.vol}
                     chart={
-                      Number.isNaN(mockStockId) || (dailySparklineByStockId.get(mockStockId)?.length ?? 0) < 2
+                      (dailySparklineByStockId.get(mockStockId)?.length ?? 0) < 2
                         ? undefined
                         : (
                           <MiniSparkline
@@ -535,7 +535,7 @@ const HomePage: React.FC = () => {
             {!isLoading && !isError && displayStockData.length > 0 && displayStockData.map((stock: StockWithPrice, index: number) => {
               const tickerText = stock.symbol || "-";
               const selectedKey = stock.symbol || String(stock.stockId);
-              const sparklineStockId = toNumericStockId(stock.stockId);
+              const sparklineKey = String(stock.stockId || stock.symbol);
 
               return (
                 <RealTimeStockRow
@@ -545,7 +545,7 @@ const HomePage: React.FC = () => {
                   isSelected={selectedStock.ticker === selectedKey}
                   isMarketOpen={isMarketOpen}
                   activeFilter={activeFilter}
-                  sparklineValues={sparklineStockId == null ? undefined : dailySparklineByStockId.get(sparklineStockId)}
+                  sparklineValues={dailySparklineByStockId.get(sparklineKey)}
                   onSelect={() => {
                     setSelectedStock({
                       name: stock.name,

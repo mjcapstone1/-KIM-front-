@@ -24,6 +24,8 @@ export type PortfolioAsset = {
   id: string | number;
   name: string;
   amount: number;
+  quantity?: number;
+  avgPrice?: number;
   totalPrice: number;
   currency: string; // "USD" | "KRW"
   stockId: StockId;
@@ -47,6 +49,11 @@ export type AssetAllocationResponse = {
   totalAmount: number;
   changeAmount: number;
   changeRate: number;
+};
+
+type PortfolioHoldingsResponse = {
+  folderId?: string | null;
+  items?: PortfolioAsset[];
 };
 
 // 포트폴리오 성과 차트 관련 타입
@@ -117,6 +124,15 @@ export const assetPortfolioApi = {
   getAssetAllocation: async (): Promise<AssetAllocationResponse> => {
     const res = await assetApiClient.get<AssetAllocationResponse>("/assets/allocation");
     return res.data;
+  },
+
+  /** 전체 보유 종목 조회: GET /api/v1/simulator/portfolio-holdings */
+  getPortfolioHoldings: async (folderId?: string | null): Promise<PortfolioAsset[]> => {
+    const res = await assetApiClient.get<PortfolioHoldingsResponse>(
+      "/api/v1/simulator/portfolio-holdings",
+      { params: folderId ? { folderId } : undefined },
+    );
+    return Array.isArray(res.data.items) ? res.data.items : [];
   },
 
   /** 자산 이동: PATCH /api/portfolios/{sourcePortfolioId}/assets/{assetId}/transfer */

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import type { TransactionRequest } from "@/api/trade";
-import { walletApi } from "@/api/wallet";
+import type { StockId } from "@/api/market";
+import { useStockHolding, useWalletBalance } from "@/hooks/usePortfolioQueries";
 import { useCreateTrade } from "@/hooks/useTradeQueries";
 import { cn } from "@/utils/cn";
 
 interface OrderPanelProps {
   currentPrice: number;
-  stockId: number;
+  stockId: StockId;
   stockName: string;
   currency?: "USD" | "KRW";
   onTradeSuccess?: () => void;
@@ -17,7 +18,12 @@ type OrderMode = "지정가" | "시장가" | "예약 주문";
 type TradeType = "buy" | "sell";
 
 const formatMoney = (value: number) => `₩${Math.max(0, Math.round(value)).toLocaleString("ko-KR")}`;
+const formatSignedMoney = (value: number) => `${value >= 0 ? "+" : "-"}₩${Math.abs(Math.round(value)).toLocaleString("ko-KR")}`;
 const formatAskBidVolume = (value: number) => value >= 1000 ? `${(value / 1000).toFixed(1)}K` : `${value}`;
+const toNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
 
 const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) => {
   const safeCurrentPrice = currentPrice > 0 ? currentPrice : 74200;
@@ -25,22 +31,20 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
   const [orderMode, setOrderMode] = useState<OrderMode>("지정가");
   const [price, setPrice] = useState(safeCurrentPrice);
   const [quantity, setQuantity] = useState(1);
-  const [balance, setBalance] = useState<number>(50_000_000);
   const [orderStatus, setOrderStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const createTrade = useCreateTrade();
-
-  useEffect(() => {
-    let alive = true;
-    walletApi.getBalance()
-      .then((data) => {
-        if (!alive) return;
-        setBalance(Number.isFinite(data.balance) ? Math.max(0, data.balance) : 50_000_000);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const walletQuery = useWalletBalance();
+  const holdingQuery = useStockHolding(stockId);
+  const balance = toNumber(
+    walletQuery.data?.withdrawableBalance ?? walletQuery.data?.balance,
+    0,
+  );
+  const holdingQuantity = toNumber(holdingQuery.data?.quantity ?? holdingQuery.data?.amount, 0);
+  const avgPrice = toNumber(holdingQuery.data?.avgPrice, 0);
+  const holdingValue = toNumber(holdingQuery.data?.currentValue, safeCurrentPrice * holdingQuantity);
+  const investedAmount = avgPrice * holdingQuantity;
+  const profitLoss = holdingQuantity > 0 ? holdingValue - investedAmount : 0;
+  const profitRate = investedAmount > 0 ? (profitLoss / investedAmount) * 100 : 0;
 
   useEffect(() => {
     if (safeCurrentPrice > 0) {
@@ -56,19 +60,21 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
     return () => window.clearTimeout(timer);
   }, [orderStatus]);
 
+  const stockHash = useMemo(() => String(stockId).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0), [stockId]);
+
   const askRows = useMemo(() => (
     Array.from({ length: 5 }, (_, index) => ({
       price: Math.round(safeCurrentPrice * (1 + (5 - index) * 0.001)),
-      volume: 1100 + ((index * 791 + stockId * 137) % 4500),
+      volume: 1100 + ((index * 791 + stockHash * 137) % 4500),
     }))
-  ), [safeCurrentPrice, stockId]);
+  ), [safeCurrentPrice, stockHash]);
 
   const bidRows = useMemo(() => (
     Array.from({ length: 5 }, (_, index) => ({
       price: Math.round(safeCurrentPrice * (1 - (index + 1) * 0.001)),
-      volume: 580 + ((index * 631 + stockId * 193) % 4500),
+      volume: 580 + ((index * 631 + stockHash * 193) % 4500),
     }))
-  ), [safeCurrentPrice, stockId]);
+  ), [safeCurrentPrice, stockHash]);
 
   const totalAmount = price * quantity;
 
@@ -81,7 +87,10 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
   };
 
   const setQuantityByPercent = (percent: number) => {
-    const maxQuantity = Math.floor((balance * percent) / 100 / Math.max(price, 1));
+    const baseAmount = tradeType === "buy"
+      ? balance / Math.max(price, 1)
+      : holdingQuantity;
+    const maxQuantity = Math.floor((baseAmount * percent) / 100);
     setQuantity(Math.max(1, maxQuantity));
   };
 
@@ -92,7 +101,7 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
   };
 
   const handleOrder = async () => {
-    if (!stockId || price <= 0 || quantity <= 0) {
+    if (!String(stockId).trim() || price <= 0 || quantity <= 0) {
       setOrderStatus({ type: "error", message: "주문 정보를 확인해주세요." });
       return;
     }
@@ -102,21 +111,27 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
       return;
     }
 
+    if (tradeType === "sell" && quantity > holdingQuantity) {
+      setOrderStatus({ type: "error", message: "보유 수량이 부족합니다." });
+      return;
+    }
+
     const request: TransactionRequest = {
       stockId,
       amount: quantity,
+      quantity,
       price,
       portfolioId: 1,
       tradeType: orderMode === "예약 주문" ? "RESERVED" : "NORMAL",
       transactionType: tradeType === "buy" ? "BUY" : "SELL",
+      priceType: orderMode === "시장가" ? "market" : orderMode === "예약 주문" ? "scheduled" : "limit",
+      type: tradeType,
     };
 
     try {
       await createTrade.mutateAsync(request);
       setOrderStatus({ type: "success", message: `${tradeType === "buy" ? "매수" : "매도"} 주문이 완료되었습니다.` });
-      if (tradeType === "buy") {
-        setBalance((prev) => Math.max(0, prev - totalAmount));
-      }
+      await Promise.allSettled([walletQuery.refetch(), holdingQuery.refetch()]);
       onTradeSuccess?.();
     } catch (error) {
       const message = axios.isAxiosError(error)
@@ -207,7 +222,7 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
       <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-[#909193]">보유 잔액</span>
-          <span className="font-bold text-[#1D1E20]">{formatMoney(balance)}</span>
+          <span className="font-bold text-[#1D1E20]">{walletQuery.isLoading ? "조회중..." : formatMoney(balance)}</span>
         </div>
       </div>
 
@@ -302,23 +317,27 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-[#444441]">보유 잔액</span>
-            <span className="font-bold text-[#1D1E20]">{formatMoney(balance)}</span>
+            <span className="font-bold text-[#1D1E20]">{walletQuery.isLoading ? "조회중..." : formatMoney(balance)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-[#444441]">보유 수량</span>
-            <span className="font-bold text-[#1D1E20]">0주</span>
+            <span className="font-bold text-[#1D1E20]">{holdingQuery.isLoading ? "조회중..." : `${holdingQuantity.toLocaleString("ko-KR")}주`}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-[#BDBDBD]">평균 매수가</span>
-            <span className="text-[#1D1E20]">-</span>
+            <span className="text-[#1D1E20]">{holdingQuantity > 0 ? formatMoney(avgPrice) : "-"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-[#BDBDBD]">평가 손익</span>
-            <span className="text-[#BDBDBD]">-</span>
+            <span className={cn("font-medium", profitLoss >= 0 ? "text-[#00A63E]" : "text-[#001AFF]")}>
+              {holdingQuantity > 0 ? formatSignedMoney(profitLoss) : "-"}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-[#BDBDBD]">수익률</span>
-            <span className="text-[#BDBDBD]">-</span>
+            <span className={cn("font-medium", profitRate >= 0 ? "text-[#00A63E]" : "text-[#001AFF]")}>
+              {holdingQuantity > 0 ? `${profitRate >= 0 ? "+" : ""}${profitRate.toFixed(2)}%` : "-"}
+            </span>
           </div>
         </div>
       </div>

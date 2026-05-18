@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { tradeApi } from "@/api/trade";
 import type { TradeId, TransactionRequest, TradeResponse, TradeHistoryResponse } from "@/api/trade";
+import { portfolioKeys, walletKeys } from "@/hooks/usePortfolioQueries";
 
 // --- Query Keys ---
 
@@ -55,6 +56,9 @@ export function useCreateTrade() {
       }
       // 거래 내역 갱신
       queryClient.invalidateQueries({ queryKey: [...tradeKeys.all, "history"] });
+      queryClient.invalidateQueries({ queryKey: walletKeys.all });
+      queryClient.invalidateQueries({ queryKey: portfolioKeys.all });
+      queryClient.invalidateQueries({ queryKey: ["asset"] });
     },
   });
 }
@@ -72,6 +76,9 @@ export function useCancelTrade() {
       queryClient.invalidateQueries({ queryKey: tradeKeys.reservedStockIds() });
       // 거래 내역 갱신
       queryClient.invalidateQueries({ queryKey: [...tradeKeys.all, "history"] });
+      queryClient.invalidateQueries({ queryKey: walletKeys.all });
+      queryClient.invalidateQueries({ queryKey: portfolioKeys.all });
+      queryClient.invalidateQueries({ queryKey: ["asset"] });
     },
   });
 }
