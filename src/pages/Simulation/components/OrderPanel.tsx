@@ -5,6 +5,7 @@ import type { StockId } from "@/api/market";
 import { useStockHolding, useWalletBalance } from "@/hooks/usePortfolioQueries";
 import { useCreateTrade } from "@/hooks/useTradeQueries";
 import { cn } from "@/utils/cn";
+import { getOrderStatusMeta } from "@/utils/orderStatus";
 
 interface OrderPanelProps {
   currentPrice: number;
@@ -31,7 +32,7 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
   const [orderMode, setOrderMode] = useState<OrderMode>("지정가");
   const [price, setPrice] = useState(safeCurrentPrice);
   const [quantity, setQuantity] = useState(1);
-  const [orderStatus, setOrderStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [orderStatus, setOrderStatus] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
   const createTrade = useCreateTrade();
   const walletQuery = useWalletBalance();
   const holdingQuery = useStockHolding(stockId);
@@ -129,8 +130,12 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
     };
 
     try {
-      await createTrade.mutateAsync(request);
-      setOrderStatus({ type: "success", message: `${tradeType === "buy" ? "매수" : "매도"} 주문이 완료되었습니다.` });
+      const order = await createTrade.mutateAsync(request);
+      const meta = getOrderStatusMeta(order);
+      setOrderStatus({
+        type: meta.level === "pending" ? "info" : meta.level === "failed" ? "error" : "success",
+        message: meta.description,
+      });
       await Promise.allSettled([walletQuery.refetch(), holdingQuery.refetch()]);
       onTradeSuccess?.();
     } catch (error) {
@@ -291,7 +296,14 @@ const OrderPanel = ({ currentPrice, stockId, onTradeSuccess }: OrderPanelProps) 
         </div>
 
         {orderStatus && (
-          <div className={cn("rounded-lg p-3 text-center text-sm", orderStatus.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+          <div
+            className={cn(
+              "rounded-lg p-3 text-center text-sm",
+              orderStatus.type === "success" && "bg-green-100 text-green-700",
+              orderStatus.type === "info" && "bg-amber-100 text-amber-800",
+              orderStatus.type === "error" && "bg-red-100 text-red-700",
+            )}
+          >
             {orderStatus.message}
           </div>
         )}

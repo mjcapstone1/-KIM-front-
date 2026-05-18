@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import type { PortfolioAsset } from "@/api/asset";
+import type { TradeResponse, TransactionRequest } from "@/api/trade";
+import { useCancelTrade, useCreateTrade, useTradeHistory } from "@/hooks/useTradeQueries";
 import { formatVolume, formatWon, type SimStock } from "../simMarketTypes";
+import OrderStatusNotice from "./OrderStatusNotice";
 
 type Tab = "favorites" | "holdings" | "scheduled" | "portfolio";
 
@@ -13,16 +17,6 @@ interface PortfolioTabsPanelProps {
   onSearchChange: (value: string) => void;
   onSelectStock: (stock: SimStock) => void;
   onToggleFavorite: (stockId: string) => void;
-}
-
-interface ScheduledOrder {
-  id: string;
-  stock: SimStock;
-  type: "buy" | "sell";
-  price: number;
-  quantity: number;
-  condition: "above" | "below";
-  createdAt: string;
 }
 
 type HoldingStock = SimStock & {
@@ -42,6 +36,54 @@ const tabs: Array<{ key: Tab; label: string }> = [
 const toNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const getOrderId = (order: TradeResponse) => String(order.orderId ?? order.tradeId);
+
+const getOrderSide = (order: TradeResponse): "buy" | "sell" => {
+  if (order.type === "sell" || order.transactionType === "SELL") return "sell";
+  return "buy";
+};
+
+const isScheduledLikeOrder = (order: TradeResponse) => {
+  const status = String(order.status ?? "").toLowerCase();
+  return order.tradeType === "RESERVED"
+    || order.priceType === "scheduled"
+    || order.priceType === "limit"
+    || order.kind === "auto"
+    || status === "pending"
+    || status === "failed"
+    || status === "canceled"
+    || status === "cancelled";
+};
+
+const getOrderConditionLabel = (order: TradeResponse) => {
+  const condition = String(order.autoCondition ?? "").toLowerCase();
+  if (condition === "above" || condition === "gte" || condition === "up") return "지정가 이상";
+  if (condition === "below" || condition === "lte" || condition === "down") return "지정가 이하";
+  if (order.priceType === "limit") return getOrderSide(order) === "buy" ? "지정가 이하" : "지정가 이상";
+  if (order.priceType === "scheduled") return "예약 조건";
+  return "주문 조건";
+};
+
+const formatOrderDate = (value?: string | null) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { message?: string } | undefined;
+    return data?.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
 };
 
 const toHoldingStock = (asset: PortfolioAsset, stocks: SimStock[]): HoldingStock => {
@@ -148,7 +190,11 @@ const PortfolioTabsPanel = ({
     price: "",
     quantity: "1",
   });
-  const [scheduledOrders, setScheduledOrders] = useState<ScheduledOrder[]>([]);
+  const [scheduleStatus, setScheduleStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const today = useMemo(() => new Date(), []);
+  const ordersQuery = useTradeHistory(today.getFullYear(), today.getMonth() + 1);
+  const createTrade = useCreateTrade();
+  const cancelTrade = useCancelTrade();
 
   const filteredStocks = stocks.filter((stock) => {
     const query = searchQuery.trim().toLowerCase();
@@ -164,26 +210,58 @@ const PortfolioTabsPanel = ({
   const totalProfitLossRate = totalHoldingValue > 0
     ? (totalProfitLoss / (totalHoldingValue - totalProfitLoss)) * 100
     : 0;
+  const scheduledOrders = (ordersQuery.data ?? []).filter(isScheduledLikeOrder);
 
-  const addScheduledOrder = () => {
+  useEffect(() => {
+    if (!stocks.length) return;
+    setScheduleDraft((prev) => {
+      if (stocks.some((stock) => stock.id === prev.stockId)) return prev;
+      return { ...prev, stockId: stocks[0].id };
+    });
+  }, [stocks]);
+
+  const addScheduledOrder = async () => {
     const stock = stocks.find((item) => item.id === scheduleDraft.stockId) ?? stocks[0];
     if (!stock) return;
     const price = Number(scheduleDraft.price) || stock.price;
     const quantity = Number(scheduleDraft.quantity) || 1;
+    if (price <= 0 || quantity <= 0) {
+      setScheduleStatus({ type: "error", message: "예약 가격과 수량을 확인해주세요." });
+      return;
+    }
 
-    setScheduledOrders((prev) => [
-      ...prev,
-      {
-        id: String(Date.now()),
-        stock,
-        type: scheduleDraft.type,
-        price,
-        quantity,
-        condition: scheduleDraft.condition,
-        createdAt: "2024-04-06 11:00",
-      },
-    ]);
-    setIsScheduleOpen(false);
+    const request: TransactionRequest = {
+      stockId: stock.id,
+      amount: quantity,
+      quantity,
+      price,
+      portfolioId: 1,
+      tradeType: "RESERVED",
+      transactionType: scheduleDraft.type === "buy" ? "BUY" : "SELL",
+      priceType: "scheduled",
+      type: scheduleDraft.type,
+      autoCondition: scheduleDraft.condition,
+      triggerPrice: price,
+    };
+
+    try {
+      await createTrade.mutateAsync(request);
+      setScheduleStatus({ type: "success", message: "예약 주문이 등록되었습니다. 조건에 도달하면 먼저 접수된 주문부터 체결됩니다." });
+      await ordersQuery.refetch();
+      setIsScheduleOpen(false);
+    } catch (error) {
+      setScheduleStatus({ type: "error", message: getErrorMessage(error, "예약 주문 등록에 실패했습니다.") });
+    }
+  };
+
+  const cancelScheduledOrder = async (order: TradeResponse) => {
+    try {
+      await cancelTrade.mutateAsync(getOrderId(order));
+      setScheduleStatus({ type: "success", message: "예약 주문이 취소되었습니다." });
+      await ordersQuery.refetch();
+    } catch (error) {
+      setScheduleStatus({ type: "error", message: getErrorMessage(error, "예약 주문 취소에 실패했습니다.") });
+    }
   };
 
   return (
@@ -327,11 +405,17 @@ const PortfolioTabsPanel = ({
         <section className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1D1E20]">예약 주문</h2>
+              <div>
+                <h2 className="text-xl font-bold text-[#1D1E20]">예약 주문</h2>
+                <p className="mt-1 text-sm text-[#909193]">
+                  대기, 체결, 취소, 실패 사유를 백엔드 주문 상태 그대로 풀어서 보여줍니다.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setScheduleDraft({ stockId: stocks[0]?.id ?? "1", type: "buy", condition: "below", price: "", quantity: "1" });
+                  setScheduleStatus(null);
                   setIsScheduleOpen(true);
                 }}
                 className="rounded-lg bg-[#42D6BA] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#3AB8A8]"
@@ -339,41 +423,69 @@ const PortfolioTabsPanel = ({
                 예약 주문 추가
               </button>
             </div>
+            {scheduleStatus && (
+              <div className={`mt-4 rounded-xl px-4 py-3 text-sm ${
+                scheduleStatus.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+              }`}>
+                {scheduleStatus.message}
+              </div>
+            )}
           </div>
           <div className="max-h-[600px] divide-y divide-gray-100 overflow-y-auto">
             {scheduledOrders.map((order) => (
-              <div key={order.id} className="px-6 py-4 transition-colors hover:bg-gray-50">
+              <div key={getOrderId(order)} className="px-6 py-4 transition-colors hover:bg-gray-50">
                 <div className="mb-2 flex items-start justify-between">
                   <div>
                     <div className="mb-1 flex items-center gap-2">
-                      <div className="font-bold text-[#1D1E20]">{order.stock.name}</div>
+                      <div className="font-bold text-[#1D1E20]">{order.stockName ?? order.stockId}</div>
                       <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                        order.type === "buy" ? "bg-[#FFC2C2] text-[#FF0000]" : "bg-[#DFE2FF] text-[#001AFF]"
+                        getOrderSide(order) === "buy" ? "bg-[#FFC2C2] text-[#FF0000]" : "bg-[#DFE2FF] text-[#001AFF]"
                       }`}>
-                        {order.type === "buy" ? "매수" : "매도"}
+                        {getOrderSide(order) === "buy" ? "매수" : "매도"}
+                      </span>
+                      <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-[#696969]">
+                        {order.priceType === "scheduled" ? "예약" : order.priceType === "limit" ? "지정가" : "주문"}
                       </span>
                     </div>
                     <div className="text-sm text-[#909193]">
-                      {order.condition === "above" ? "지정가 이상" : "지정가 이하"} {formatWon(order.price)} 도달 시
+                      {getOrderConditionLabel(order)} {formatWon(toNumber(order.triggerPrice ?? order.price, 0))} 도달 시
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-medium text-[#1D1E20]">{order.quantity}주</div>
-                    <div className="text-xs text-[#A5A6A9]">{order.createdAt}</div>
+                    <div className="font-medium text-[#1D1E20]">{toNumber(order.quantity ?? order.amount, 0).toLocaleString("ko-KR")}주</div>
+                    <div className="text-xs text-[#A5A6A9]">{formatOrderDate(order.createdAt)}</div>
                   </div>
                 </div>
+                <OrderStatusNotice order={order} className="mb-3" />
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-[#909193]">현재가 {formatWon(order.stock.price)}</div>
-                  <button
-                    type="button"
-                    onClick={() => setScheduledOrders((prev) => prev.filter((item) => item.id !== order.id))}
-                    className="text-sm font-medium text-red-600 hover:text-[#FF0000]"
-                  >
-                    취소
-                  </button>
+                  <div className="text-sm text-[#909193]">
+                    주문금액 {formatWon(toNumber(order.totalKrw ?? order.total, 0))}
+                  </div>
+                  {String(order.status ?? "").toLowerCase() === "pending" ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancelScheduledOrder(order)}
+                      disabled={cancelTrade.isPending}
+                      className="text-sm font-medium text-red-600 hover:text-[#FF0000] disabled:opacity-50"
+                    >
+                      취소
+                    </button>
+                  ) : (
+                    <span className="text-xs text-[#A5A6A9]">
+                      {formatOrderDate(order.completedAt ?? order.canceledAt ?? order.failedAt)}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
+            {ordersQuery.isLoading && (
+              <div className="px-6 py-16 text-center text-sm text-[#909193]">예약 주문을 불러오는 중입니다.</div>
+            )}
+            {!ordersQuery.isLoading && scheduledOrders.length === 0 && (
+              <div className="px-6 py-16 text-center text-sm text-[#909193]">
+                아직 예약 주문이 없습니다. 종목 상세에서 예약 주문을 넣으면 여기에서 상태와 실패 사유를 확인할 수 있습니다.
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -515,8 +627,20 @@ const PortfolioTabsPanel = ({
                 placeholder="수량"
                 className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#42D6BA]"
               />
-              <button type="button" onClick={addScheduledOrder} className="w-full rounded-xl bg-[#42D6BA] py-3 font-bold text-white hover:bg-[#3AB8A8]">
-                예약 주문 추가
+              {scheduleStatus && (
+                <div className={`rounded-xl px-4 py-3 text-sm ${
+                  scheduleStatus.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                }`}>
+                  {scheduleStatus.message}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => void addScheduledOrder()}
+                disabled={createTrade.isPending}
+                className="w-full rounded-xl bg-[#42D6BA] py-3 font-bold text-white hover:bg-[#3AB8A8] disabled:opacity-50"
+              >
+                {createTrade.isPending ? "예약 주문 등록중..." : "예약 주문 추가"}
               </button>
             </div>
           </div>

@@ -17,6 +17,8 @@ export interface TransactionRequest {
   transactionType: TransactionType;
   priceType?: "market" | "limit" | "scheduled";
   type?: "buy" | "sell";
+  autoCondition?: "above" | "below" | "gte" | "lte" | "up" | "down";
+  triggerPrice?: number;
 }
 
 export interface TradeResponse {
@@ -40,17 +42,15 @@ export interface TradeResponse {
   triggerPrice?: number | null;
   stockName?: string;
   createdAt?: string | null;
+  acceptedAt?: string | null;
+  completedAt?: string | null;
+  canceledAt?: string | null;
+  failedAt?: string | null;
+  failureReasonCode?: string | null;
+  failureMessage?: string | null;
 }
 
-export interface TradeHistoryResponse {
-  tradeId: TradeId;
-  stockId: StockId;
-  stockName?: string;
-  amount: number;
-  price: number;
-  portfolioId?: number;
-  transactionType: TransactionType;
-  tradeType: TradeType;
+export interface TradeHistoryResponse extends TradeResponse {
   createdAt: string;
 }
 
