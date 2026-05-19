@@ -2,7 +2,7 @@
 
 ## Vercel
 
-Connect GitHub repo `KIM-FINVIBE/Front`.
+Connect GitHub repo `mjcapstone1/-KIM-front-`.
 
 Build settings:
 
