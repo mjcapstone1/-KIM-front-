@@ -2,16 +2,12 @@ import axios, { AxiosError } from "axios";
 import { useAuthStore } from "@/store/useAuthStore";
 import { isTokenExpiredOrExpiring } from "@/utils/tokenExpiry";
 import { createMockAdapter } from "@/api/mockApi";
-
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ??
-  import.meta.env.VITE_API_BASE ??
-  (import.meta.env.DEV ? "/api" : "http://localhost:8080");
+import { API_BASE_URL } from "@/api/config";
 
 const mockAdapter = createMockAdapter();
 
 export const insightApiClient = axios.create({
-  baseURL: API_BASE,
+  baseURL: API_BASE_URL,
   withCredentials: true,
   ...(mockAdapter ? { adapter: mockAdapter } : {}),
 });
@@ -52,7 +48,7 @@ async function refreshTokens() {
   }
 
   try {
-    const res = await axios.post(`${API_BASE}/auth/refresh`, {
+    const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
       refreshToken: tokens.refreshToken,
     });
     setTokens(res.data);

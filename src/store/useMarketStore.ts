@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import { isTokenExpiredOrExpiring } from "@/utils/tokenExpiry";
+import { buildMarketWebSocketUrl } from "@/api/config";
 
 // --- Types ---
 
@@ -120,12 +121,7 @@ function normalizeQuoteData(
 }
 
 function buildWsUrl(): string {
-  const envUrl = import.meta.env.VITE_WS_MARKET_URL;
-  if (envUrl) return envUrl;
-
-  const { protocol, host } = window.location;
-  const wsProtocol = protocol === "https:" ? "wss:" : "ws:";
-  return `${wsProtocol}//${host}/api/market/ws`;
+  return buildMarketWebSocketUrl();
 }
 
 function send(data: object) {

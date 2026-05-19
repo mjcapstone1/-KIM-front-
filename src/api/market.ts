@@ -4,15 +4,12 @@ import type { CandlestickData, Time } from "lightweight-charts";
 import { DateTime } from "luxon";
 import type { ChartPeriod } from "@/pages/Simulation/components/StockChart";
 import { createMockAdapter } from "@/api/mockApi";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL
-  ?? import.meta.env.VITE_API_BASE
-  ?? (import.meta.env.DEV ? "/api" : "http://localhost:8080");
+import { API_BASE_URL } from "@/api/config";
 
 const mockAdapter = createMockAdapter();
 
 const marketApi = axios.create({
-  baseURL: API_BASE,
+  baseURL: API_BASE_URL,
   withCredentials: true,
   ...(mockAdapter ? { adapter: mockAdapter } : {}),
 });

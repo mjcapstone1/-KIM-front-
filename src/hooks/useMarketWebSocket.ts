@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { buildMarketWebSocketUrl } from "@/api/config";
 
 // --- Types (API 명세서 기준) ---
 
@@ -72,12 +73,7 @@ interface UseMarketWebSocketOptions {
 }
 
 function buildWsUrl(): string {
-  const envUrl = import.meta.env.VITE_WS_MARKET_URL;
-  if (envUrl) return envUrl;
-
-  const { protocol, host } = window.location;
-  const wsProtocol = protocol === "https:" ? "wss:" : "ws:";
-  return `${wsProtocol}//${host}/api/market/ws`;
+  return buildMarketWebSocketUrl();
 }
 
 export function useMarketWebSocket(options: UseMarketWebSocketOptions = {}) {
