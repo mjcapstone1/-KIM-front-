@@ -340,6 +340,7 @@ const AILearningPage = () => {
 
       {selectedLesson && (
         <LessonViewerModal
+          key={selectedLesson.id}
           lesson={selectedLesson}
           onClose={() => setSelectedLesson(null)}
           onComplete={completeLesson}
