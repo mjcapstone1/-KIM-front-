@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { getLearningStorageScope, isLearningCompleted, readInvestmentType, type InvestmentType } from "@/pages/AILearning/learningData";
 import PortfolioTabsPanel from "./components/PortfolioTabsPanel";
 import SimulatorGateModal from "./components/SimulatorGateModal";
-import StockTradeDetail from "./components/StockTradeDetail";
 import { formatWon, type SimStock } from "./simMarketTypes";
 import { useMarketStatus, useTopByVolumeWithPrices } from "@/hooks/useMarketQueries";
 import { useAssetAllocation, usePortfolioHoldings } from "@/hooks/usePortfolioQueries";
@@ -25,7 +24,6 @@ const SimulationPage = () => {
   const learningScope = useMemo(() => getLearningStorageScope(user), [user]);
   const investmentType = useMemo<InvestmentType | null>(() => readInvestmentType(learningScope), [learningScope]);
   const [showGate, setShowGate] = useState(() => !isLearningCompleted(readInvestmentType(getLearningStorageScope(useAuthStore.getState().user)), getLearningStorageScope(useAuthStore.getState().user)));
-  const [selectedStock, setSelectedStock] = useState<SimStock | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
   const { isMarketOpen } = useMarketStatus();
@@ -39,11 +37,6 @@ const SimulationPage = () => {
   const changeAmount = allocation?.changeAmount ?? 0;
   const changeRate = allocation?.changeRate ?? 0;
   const isProfit = changeAmount >= 0;
-
-  const refreshPortfolio = () => {
-    void allocationQuery.refetch();
-    void holdingsQuery.refetch();
-  };
 
   useEffect(() => {
     setShowGate(!canUseSimulator);
@@ -93,58 +86,52 @@ const SimulationPage = () => {
   return (
     <div className="min-h-screen bg-white p-8">
       <div className="mx-auto max-w-7xl">
-        {selectedStock ? (
-          <StockTradeDetail stock={selectedStock} onBack={() => setSelectedStock(null)} onTradeSuccess={refreshPortfolio} />
-        ) : (
-          <>
-            <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
-                <p className="mb-2 text-sm text-[#909193]">보유 자산</p>
-                <p className="mb-1 text-3xl font-bold text-[#1D1E20]">
-                  {allocationQuery.isLoading ? "조회중..." : `₩${formatWon(allocation?.totalAmount ?? 0)}`}
-                </p>
-                <p className={`text-sm font-bold ${isProfit ? "text-[#00A63E]" : "text-[#001AFF]"}`}>
-                  {isProfit ? "+" : ""}{changeRate.toFixed(2)}% ({isProfit ? "+" : "-"}₩{formatWon(Math.abs(changeAmount))})
-                </p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
-                <p className="mb-2 text-sm text-[#909193]">현금</p>
-                <p className="mb-1 text-3xl font-bold text-[#1D1E20]">
-                  {allocationQuery.isLoading ? "조회중..." : `₩${formatWon(allocation?.cashAmount ?? 0)}`}
-                </p>
-                <p className="text-sm text-[#909193]">투자 가능 금액</p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
-                <p className="mb-2 text-sm text-[#909193]">수익률</p>
-                <p className={`mb-1 text-3xl font-bold ${isProfit ? "text-[#00A63E]" : "text-[#001AFF]"}`}>
-                  {isProfit ? "+" : ""}{changeRate.toFixed(2)}%
-                </p>
-                <p className="text-sm text-[#909193]">전체 수익률</p>
-              </div>
-            </section>
+        <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
+            <p className="mb-2 text-sm text-[#909193]">보유 자산</p>
+            <p className="mb-1 text-3xl font-bold text-[#1D1E20]">
+              {allocationQuery.isLoading ? "조회중..." : `₩${formatWon(allocation?.totalAmount ?? 0)}`}
+            </p>
+            <p className={`text-sm font-bold ${isProfit ? "text-[#00A63E]" : "text-[#001AFF]"}`}>
+              {isProfit ? "+" : ""}{changeRate.toFixed(2)}% ({isProfit ? "+" : "-"}₩{formatWon(Math.abs(changeAmount))})
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
+            <p className="mb-2 text-sm text-[#909193]">현금</p>
+            <p className="mb-1 text-3xl font-bold text-[#1D1E20]">
+              {allocationQuery.isLoading ? "조회중..." : `₩${formatWon(allocation?.cashAmount ?? 0)}`}
+            </p>
+            <p className="text-sm text-[#909193]">투자 가능 금액</p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 transition-colors hover:border-[#42D6BA]">
+            <p className="mb-2 text-sm text-[#909193]">수익률</p>
+            <p className={`mb-1 text-3xl font-bold ${isProfit ? "text-[#00A63E]" : "text-[#001AFF]"}`}>
+              {isProfit ? "+" : ""}{changeRate.toFixed(2)}%
+            </p>
+            <p className="text-sm text-[#909193]">전체 수익률</p>
+          </div>
+        </section>
 
-            {stocksQuery.isLoading && (
-              <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4 text-sm text-[#909193]">
-                백엔드에서 종목 가격을 불러오는 중입니다.
-              </div>
-            )}
-            {!stocksQuery.isLoading && stocks.length === 0 && (
-              <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4 text-sm text-[#909193]">
-                표시할 실데이터가 없습니다. 백엔드 KIS 키와 가격 저장 상태를 확인하세요.
-              </div>
-            )}
-            <PortfolioTabsPanel
-              stocks={stocks}
-              holdings={holdingsQuery.data ?? []}
-              isHoldingsLoading={holdingsQuery.isLoading}
-              favorites={favorites}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onSelectStock={setSelectedStock}
-              onToggleFavorite={toggleFavorite}
-            />
-          </>
+        {stocksQuery.isLoading && (
+          <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4 text-sm text-[#909193]">
+            백엔드에서 종목 가격을 불러오는 중입니다.
+          </div>
         )}
+        {!stocksQuery.isLoading && stocks.length === 0 && (
+          <div className="mb-4 rounded-xl border border-gray-100 bg-white p-4 text-sm text-[#909193]">
+            표시할 실데이터가 없습니다. 백엔드 KIS 키와 가격 저장 상태를 확인하세요.
+          </div>
+        )}
+        <PortfolioTabsPanel
+          stocks={stocks}
+          holdings={holdingsQuery.data ?? []}
+          isHoldingsLoading={holdingsQuery.isLoading}
+          favorites={favorites}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSelectStock={(stock) => navigate(`/simulation/${stock.id}`)}
+          onToggleFavorite={toggleFavorite}
+        />
       </div>
     </div>
   );
