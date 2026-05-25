@@ -371,7 +371,7 @@ const ChallengePage = () => {
                           {typeof item.currentRanking === "number" ? (
                             <span className="text-[#5C7682]">현재 #{item.currentRanking}위</span>
                           ) : (
-                            <span className="text-[#8AA0AA]">{item.squadName} 학교</span>
+                            <span className="text-[#8AA0AA]">생성된 학교</span>
                           )}
                         </div>
                       </div>
