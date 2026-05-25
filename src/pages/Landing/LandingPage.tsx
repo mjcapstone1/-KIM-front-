@@ -50,7 +50,7 @@ const LandingPage = () => {
   }, []);
 
   const start = () => {
-    navigate(tokens ? "/ai-learning" : "/login", tokens ? undefined : { state: { from: "/ai-learning" } });
+    navigate("/login", { state: { from: "/ai-learning", forceLogin: true } });
   };
 
   const go = (path: string) => {

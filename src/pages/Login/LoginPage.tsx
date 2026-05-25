@@ -16,7 +16,9 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const tokens = useAuthStore((state) => state.tokens);
   const setTokens = useAuthStore((state) => state.setTokens);
-  const from = (location.state as { from?: string } | null)?.from ?? "/home";
+  const locationState = location.state as { from?: string; forceLogin?: boolean } | null;
+  const from = locationState?.from ?? "/home";
+  const forceLogin = locationState?.forceLogin === true;
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,10 +26,10 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (tokens) {
+    if (tokens && !forceLogin) {
       navigate(from, { replace: true });
     }
-  }, [tokens, from, navigate]);
+  }, [tokens, forceLogin, from, navigate]);
 
   const handleLocalLogin = async (e: React.FormEvent) => {
     e.preventDefault();
