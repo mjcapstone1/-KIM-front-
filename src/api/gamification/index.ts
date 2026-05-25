@@ -4,6 +4,7 @@ export type {
   SquadContributionItem,
   MyXpInfo,
   SquadItem,
+  CreateSquadRequest,
   MySquadInfo,
   UserRankingItem,
   RankingPeriod,

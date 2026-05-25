@@ -54,6 +54,11 @@ export type SquadItem = {
   totalXp?: number;
 };
 
+export type CreateSquadRequest = {
+  squadName: string;
+  region?: string;
+};
+
 export type MySquadInfo = {
   squadId: number | string;
   squadName: string;
@@ -152,6 +157,40 @@ const normalizeSquadContributionItem = (item: Record<string, unknown>, index: nu
   };
 };
 
+const normalizeSquadItem = (item: Record<string, unknown>): SquadItem | null => {
+  const squadId = (item.squadId ?? item.id ?? item.groupId ?? item.teamId ?? "") as number | string;
+  const squadName = String(
+    item.squadName ??
+    item.name ??
+    item.schoolName ??
+    item.universityName ??
+    item.title ??
+    ""
+  );
+
+  if (squadName.length === 0 || String(squadId).length === 0) {
+    return null;
+  }
+
+  return {
+    squadId,
+    squadName,
+    region: typeof item.region === "string" ? item.region : typeof item.location === "string" ? item.location : undefined,
+    currentRanking:
+      typeof item.currentRanking === "number"
+        ? item.currentRanking
+        : typeof item.ranking === "number"
+          ? item.ranking
+          : undefined,
+    totalXp:
+      typeof item.totalXp === "number"
+        ? item.totalXp
+        : typeof item.xp === "number"
+          ? item.xp
+          : undefined,
+  };
+};
+
 // 백엔드가 배열을 래핑해서 반환할 수 있으므로 안전하게 추출
 function unwrapArray<T>(data: unknown, depth = 0): T[] {
   if (Array.isArray(data)) return data;
@@ -215,31 +254,8 @@ export const gamificationApi = {
 
     const rawItems = unwrapArray<Record<string, unknown>>(res.data);
     return rawItems
-      .map((item) => ({
-        squadId: (item.squadId ?? item.id ?? item.groupId ?? item.teamId ?? "") as number | string,
-        squadName: String(
-          item.squadName ??
-          item.name ??
-          item.schoolName ??
-          item.universityName ??
-          item.title ??
-          ""
-        ),
-        region: typeof item.region === "string" ? item.region : typeof item.location === "string" ? item.location : undefined,
-        currentRanking:
-          typeof item.currentRanking === "number"
-            ? item.currentRanking
-            : typeof item.ranking === "number"
-              ? item.ranking
-              : undefined,
-        totalXp:
-          typeof item.totalXp === "number"
-            ? item.totalXp
-            : typeof item.xp === "number"
-              ? item.xp
-              : undefined,
-      }))
-      .filter((item) => item.squadName.length > 0 && String(item.squadId).length > 0);
+      .map((item) => normalizeSquadItem(item))
+      .filter((item): item is SquadItem => item != null);
   },
 
   /** 내 스쿼드 조회: GET /squads/me */
@@ -251,6 +267,22 @@ export const gamificationApi = {
   /** 스쿼드 참여: POST /squads/{squadId}/join */
   joinSquad: async (squadId: number | string): Promise<void> => {
     await gamificationApiClient.post(`/squads/${squadId}/join`);
+  },
+
+  /** 학교 생성 후 자동 참여: POST /squads */
+  createSquad: async (payload: CreateSquadRequest): Promise<SquadItem> => {
+    const res = await gamificationApiClient.post("/squads", payload);
+    const response = res.data && typeof res.data === "object"
+      ? res.data as Record<string, unknown>
+      : {};
+    const rawSquad = response.squad && typeof response.squad === "object"
+      ? response.squad as Record<string, unknown>
+      : response;
+    const squad = normalizeSquadItem(rawSquad);
+    if (!squad) {
+      throw new Error("학교 생성 응답이 올바르지 않습니다.");
+    }
+    return squad;
   },
 
   /** 내 배지 목록 조회: GET /badges/me */
