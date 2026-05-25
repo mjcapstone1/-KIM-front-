@@ -253,7 +253,7 @@ const ChallengePage = () => {
               </p>
             </div>
             <div className="inline-flex items-center rounded-full bg-white px-4 py-2 border border-[#C9EDE5]">
-              <span className="text-sm font-semibold text-[#1D8D79]">총 {joinableSquads.length}개 스쿼드</span>
+              <span className="text-sm font-semibold text-[#1D8D79]">총 {joinableSquads.length}개 학교</span>
             </div>
           </div>
         </div>
@@ -298,7 +298,7 @@ const ChallengePage = () => {
             <div className="flex flex-col gap-2">
               <h2 className="text-xl font-bold text-[#12212A]">새 학교 만들기</h2>
               <p className="text-sm text-[#6F858F]">
-                학교를 만들면 자동으로 그 학교 스쿼드에 가입됩니다.
+                학교를 만들면 자동으로 그 학교에 가입됩니다.
               </p>
             </div>
 
@@ -345,7 +345,7 @@ const ChallengePage = () => {
                 onChange={(e) => setSquadSearchKeyword(e.target.value)}
                 placeholder="학교명 또는 지역으로 검색"
                 className="w-full bg-transparent text-sm text-[#14222B] placeholder:text-[#9AAEB8] outline-none"
-                aria-label="스쿼드 검색"
+                aria-label="학교 검색"
               />
             </div>
 
@@ -371,7 +371,7 @@ const ChallengePage = () => {
                           {typeof item.currentRanking === "number" ? (
                             <span className="text-[#5C7682]">현재 #{item.currentRanking}위</span>
                           ) : (
-                            <span className="text-[#8AA0AA]">{item.squadName} 스쿼드</span>
+                            <span className="text-[#8AA0AA]">{item.squadName} 학교</span>
                           )}
                         </div>
                       </div>
@@ -391,7 +391,7 @@ const ChallengePage = () => {
               <div className="rounded-xl border border-dashed border-gray-300 bg-white py-10 text-center text-sm text-gray-400">
                 {squadSearchKeyword.trim()
                   ? "검색 결과가 없습니다. 다른 학교명이나 지역으로 검색해 보세요."
-                  : "가입 가능한 스쿼드 목록이 없습니다."}
+                  : "가입 가능한 학교가 없습니다. 먼저 학교를 생성해 주세요."}
               </div>
             )}
           </>
@@ -503,9 +503,12 @@ const ChallengePage = () => {
         ) : !hasMySquad ? (
           renderJoinSquad()
         ) : (
-          <div className="flex gap-10">
-            {renderSquadDashboard()}
-          </div>
+          <>
+            {renderJoinSquad()}
+            <div className="flex gap-10">
+              {renderSquadDashboard()}
+            </div>
+          </>
         )}
       </main>
 
